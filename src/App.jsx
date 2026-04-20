@@ -1,7 +1,71 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { useRoom } from './lib/useRoom.js'
+import { useVoice } from './lib/useVoice.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
+
+function VoiceControls({ voice, partnerName }) {
+  const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
+
+  const statusLabel = (() => {
+    switch (status) {
+      case 'idle': return 'Voice off'
+      case 'requesting': return 'Asking mic...'
+      case 'waiting': return partnerName ? `Waiting for ${partnerName}...` : 'Waiting for partner...'
+      case 'connecting': return 'Connecting voice...'
+      case 'connected': return partnerName ? `Talking with ${partnerName}` : 'Voice connected'
+      case 'muted': return 'You are muted'
+      case 'denied': return 'Mic permission denied'
+      case 'failed': return 'Voice failed'
+      default: return status
+    }
+  })()
+
+  const dotClass = (() => {
+    if (status === 'connected' || status === 'muted') return 'online'
+    if (status === 'failed' || status === 'denied') return 'error'
+    if (status === 'idle') return 'dim'
+    return 'offline'
+  })()
+
+  return (
+    <div className="voice-bar">
+      <audio ref={audioRef} autoPlay playsInline />
+      <div className="voice-status">
+        <span className={`dot ${dotClass}`} />
+        <span>{statusLabel}</span>
+      </div>
+      <div className="voice-actions">
+        {!enabled ? (
+          <button
+            className="cta small"
+            onClick={enable}
+            disabled={status === 'requesting'}
+          >
+            {status === 'requesting' ? 'Requesting...' : 'Enable voice'}
+          </button>
+        ) : (
+          <>
+            <button className={muted ? 'cta small' : 'ghost small'} onClick={toggleMute}>
+              {muted ? 'Unmute' : 'Mute'}
+            </button>
+            <button className="ghost small" onClick={disable}>
+              Hang up
+            </button>
+          </>
+        )}
+      </div>
+      {error && status === 'denied' && (
+        <p className="voice-error">
+          Browser blocked mic access. Enable it in your browser's site settings and try again.
+        </p>
+      )}
+      {error && status === 'failed' && (
+        <p className="voice-error">Could not connect voice. Check your network and try again.</p>
+      )}
+    </div>
+  )
+}
 
 function MissingConfigScreen() {
   return (
@@ -577,6 +641,8 @@ function AppInner() {
     dispatch,
   } = room
 
+  const voice = useVoice({ roomCode, role })
+
   let content
   if (mode === 'menu') {
     content = (
@@ -628,6 +694,8 @@ function AppInner() {
     )
   }
 
+  const showVoice = mode !== 'menu' && roomCode
+
   return (
     <main className="app-shell">
       <div className="glow-bg" aria-hidden="true" />
@@ -636,6 +704,7 @@ function AppInner() {
         partner={partner}
         phase={state.phase}
       />
+      {showVoice && <VoiceControls voice={voice} partnerName={partner?.name} />}
       {content}
       <footer className="footer">
         <span>Love Swap</span>

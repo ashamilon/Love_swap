@@ -580,6 +580,68 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .footer .sep { opacity: 0.5; }
 
+.voice-bar {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(25, 20, 40, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 6px 10px 6px 14px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
+}
+
+.voice-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e6defb;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.voice-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.voice-actions button {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+
+.voice-error {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  color: #ffb3b3;
+  font-size: 0.78rem;
+}
+
+.dot.error {
+  background: #ff7b7b;
+  box-shadow: 0 0 10px rgba(255, 123, 123, 0.6);
+}
+
+.dot.dim {
+  background: #5c5476;
+}
+
+@media (max-width: 520px) {
+  .voice-bar {
+    left: 12px;
+    right: 12px;
+    justify-content: space-between;
+  }
+}
+
 .env-block {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.1);
