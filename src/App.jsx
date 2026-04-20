@@ -3,6 +3,7 @@ import './App.css'
 import { useRoom } from './lib/useRoom.js'
 import { useVoice } from './lib/useVoice.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
+import { formatQuestion } from './data/questions.js'
 
 function VoiceControls({ voice, partnerName }) {
   const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
@@ -373,12 +374,18 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
   const [text, setText] = useState('')
   const [hidden, setHidden] = useState(true)
 
+  const responderName = iAmResponder ? me?.name : partner?.name
+  const questionText = formatQuestion(turn.question.text, {
+    viewerIsResponder: iAmResponder,
+    responderName,
+  })
+
   if (!iAmResponder) {
     return (
       <section className="panel">
         <TurnHeader state={state} me={me} partner={partner} role={role} />
         <div className="category-chip">{turn.question.category}</div>
-        <h2 className="question">{turn.question.text}</h2>
+        <h2 className="question">{questionText}</h2>
         <div className="waiting-card">
           <div className="spinner" />
           <p>Waiting for {partner?.name} to answer...</p>
@@ -398,7 +405,7 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
     <section className="panel">
       <TurnHeader state={state} me={me} partner={partner} role={role} />
       <div className="category-chip">{turn.question.category}</div>
-      <h2 className="question">{turn.question.text}</h2>
+      <h2 className="question">{questionText}</h2>
       <p className="subtle">
         {isChoice
           ? `Pick your honest answer. ${partner?.name} will try to guess which one you chose.`
@@ -450,12 +457,18 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
   const isChoice = turn.question.type === 'choice'
   const [text, setText] = useState('')
 
+  const responderName = iAmGuesser ? partner?.name : me?.name
+  const questionText = formatQuestion(turn.question.text, {
+    viewerIsResponder: !iAmGuesser,
+    responderName,
+  })
+
   if (!iAmGuesser) {
     return (
       <section className="panel">
         <TurnHeader state={state} me={me} partner={partner} role={role} />
         <div className="category-chip">{turn.question.category}</div>
-        <h2 className="question">{turn.question.text}</h2>
+        <h2 className="question">{questionText}</h2>
         <div className="waiting-card">
           <div className="spinner" />
           <p>Answer locked. Waiting for {partner?.name} to guess...</p>
@@ -475,7 +488,7 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
     <section className="panel">
       <TurnHeader state={state} me={me} partner={partner} role={role} />
       <div className="category-chip">{turn.question.category}</div>
-      <h2 className="question">{turn.question.text}</h2>
+      <h2 className="question">{questionText}</h2>
       <p className="subtle">
         {isChoice
           ? `${partner?.name} picked one. Which do you think they chose?`
@@ -552,11 +565,16 @@ function RevealScreen({ state, role, dispatch, me, partner }) {
   const responderName = turn.responder === 'host' ? state.players.host?.name : state.players.guest?.name
   const guesserName = turn.responder === 'host' ? state.players.guest?.name : state.players.host?.name
   const isExactMatch = state.answerText === state.guessText
+  const viewerIsResponder = turn.responder === role
+  const questionText = formatQuestion(turn.question.text, {
+    viewerIsResponder,
+    responderName,
+  })
 
   return (
     <section className="panel">
       <TurnHeader state={state} me={me} partner={partner} role={role} />
-      <h2 className="question">{turn.question.text}</h2>
+      <h2 className="question">{questionText}</h2>
 
       {isChoice ? (
         <ChoiceRevealGrid
