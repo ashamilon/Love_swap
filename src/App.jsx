@@ -349,9 +349,27 @@ function TurnHeader({ state, me, partner, role }) {
   )
 }
 
+function OptionPicker({ options, value, onChange }) {
+  return (
+    <div className="option-grid">
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          className={`option-btn ${value === opt ? 'selected' : ''}`}
+          onClick={() => onChange(opt)}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function AnswerScreen({ state, role, dispatch, me, partner }) {
   const turn = state.turns[state.turnIndex]
   const iAmResponder = turn.responder === role
+  const isChoice = turn.question.type === 'choice'
   const [text, setText] = useState('')
   const [hidden, setHidden] = useState(true)
 
@@ -381,30 +399,47 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
       <TurnHeader state={state} me={me} partner={partner} role={role} />
       <div className="category-chip">{turn.question.category}</div>
       <h2 className="question">{turn.question.text}</h2>
-      <p className="subtle">Type honestly. {partner?.name} will try to guess what you say.</p>
+      <p className="subtle">
+        {isChoice
+          ? `Pick your honest answer. ${partner?.name} will try to guess which one you chose.`
+          : `Type honestly. ${partner?.name} will try to guess what you say.`}
+      </p>
 
-      <form className="form-grid" onSubmit={submit}>
-        <label>
-          Your private answer
-          <input
-            autoFocus
-            type={hidden ? 'password' : 'text'}
+      {isChoice ? (
+        <form className="form-grid" onSubmit={submit}>
+          <OptionPicker
+            options={turn.question.options}
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Type here..."
-            required
-            maxLength={200}
+            onChange={setText}
           />
-        </label>
-        <div className="toggle-row compact">
-          <button type="button" className="ghost" onClick={() => setHidden((v) => !v)}>
-            {hidden ? 'Show letters' : 'Hide letters'}
-          </button>
-          <button type="submit" className="cta">
+          <button type="submit" className="cta" disabled={!text}>
             Lock answer
           </button>
-        </div>
-      </form>
+        </form>
+      ) : (
+        <form className="form-grid" onSubmit={submit}>
+          <label>
+            Your private answer
+            <input
+              autoFocus
+              type={hidden ? 'password' : 'text'}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type here..."
+              required
+              maxLength={200}
+            />
+          </label>
+          <div className="toggle-row compact">
+            <button type="button" className="ghost" onClick={() => setHidden((v) => !v)}>
+              {hidden ? 'Show letters' : 'Hide letters'}
+            </button>
+            <button type="submit" className="cta">
+              Lock answer
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   )
 }
@@ -412,6 +447,7 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
 function GuessScreen({ state, role, dispatch, me, partner }) {
   const turn = state.turns[state.turnIndex]
   const iAmGuesser = turn.responder !== role
+  const isChoice = turn.question.type === 'choice'
   const [text, setText] = useState('')
 
   if (!iAmGuesser) {
@@ -440,25 +476,66 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
       <TurnHeader state={state} me={me} partner={partner} role={role} />
       <div className="category-chip">{turn.question.category}</div>
       <h2 className="question">{turn.question.text}</h2>
-      <p className="subtle">{partner?.name} has answered. What do you think they said?</p>
+      <p className="subtle">
+        {isChoice
+          ? `${partner?.name} picked one. Which do you think they chose?`
+          : `${partner?.name} has answered. What do you think they said?`}
+      </p>
 
-      <form className="form-grid" onSubmit={submit}>
-        <label>
-          Your guess
-          <input
-            autoFocus
+      {isChoice ? (
+        <form className="form-grid" onSubmit={submit}>
+          <OptionPicker
+            options={turn.question.options}
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={`What did ${partner?.name} say?`}
-            required
-            maxLength={200}
+            onChange={setText}
           />
-        </label>
-        <button type="submit" className="cta">
-          Lock guess and reveal
-        </button>
-      </form>
+          <button type="submit" className="cta" disabled={!text}>
+            Lock guess and reveal
+          </button>
+        </form>
+      ) : (
+        <form className="form-grid" onSubmit={submit}>
+          <label>
+            Your guess
+            <input
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={`What did ${partner?.name} say?`}
+              required
+              maxLength={200}
+            />
+          </label>
+          <button type="submit" className="cta">
+            Lock guess and reveal
+          </button>
+        </form>
+      )}
     </section>
+  )
+}
+
+function ChoiceRevealGrid({ options, answer, guess, responderName, guesserName }) {
+  return (
+    <div className="choice-reveal">
+      {options.map((opt) => {
+        const isAnswer = opt === answer
+        const isGuess = opt === guess
+        const classes = ['choice-pill']
+        if (isAnswer) classes.push('is-answer')
+        if (isGuess) classes.push('is-guess')
+        if (isAnswer && isGuess) classes.push('is-match')
+        return (
+          <div key={opt} className={classes.join(' ')}>
+            <span className="choice-text">{opt}</span>
+            <span className="choice-tags">
+              {isAnswer && <span className="choice-tag tag-answer">{responderName}</span>}
+              {isGuess && <span className="choice-tag tag-guess">{guesserName}</span>}
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -471,37 +548,55 @@ function RevealScreen({ state, role, dispatch, me, partner }) {
 
   const turn = state.turns[state.turnIndex]
   const isHost = role === 'host'
+  const isChoice = turn.question.type === 'choice'
   const responderName = turn.responder === 'host' ? state.players.host?.name : state.players.guest?.name
   const guesserName = turn.responder === 'host' ? state.players.guest?.name : state.players.host?.name
+  const isExactMatch = state.answerText === state.guessText
 
   return (
     <section className="panel">
       <TurnHeader state={state} me={me} partner={partner} role={role} />
       <h2 className="question">{turn.question.text}</h2>
 
-      <div className="reveal-grid">
-        <div className={`flip-card ${flipped ? 'flipped' : ''}`}>
-          <div className="flip-inner">
-            <div className="flip-face flip-front">
-              <p className="mini-label">{responderName} said</p>
-              <p className="mini-hint">revealing...</p>
+      {isChoice ? (
+        <ChoiceRevealGrid
+          options={turn.question.options}
+          answer={state.answerText}
+          guess={state.guessText}
+          responderName={responderName}
+          guesserName={guesserName}
+        />
+      ) : (
+        <div className="reveal-grid">
+          <div className={`flip-card ${flipped ? 'flipped' : ''}`}>
+            <div className="flip-inner">
+              <div className="flip-face flip-front">
+                <p className="mini-label">{responderName} said</p>
+                <p className="mini-hint">revealing...</p>
+              </div>
+              <div className="flip-face flip-back">
+                <p className="mini-label">{responderName}</p>
+                <p className="reveal-text">{state.answerText}</p>
+              </div>
             </div>
-            <div className="flip-face flip-back">
-              <p className="mini-label">{responderName}</p>
-              <p className="reveal-text">{state.answerText}</p>
+          </div>
+          <div className="flip-card static">
+            <div className="flip-face solo">
+              <p className="mini-label">{guesserName} guessed</p>
+              <p className="reveal-text">{state.guessText}</p>
             </div>
           </div>
         </div>
-        <div className="flip-card static">
-          <div className="flip-face solo">
-            <p className="mini-label">{guesserName} guessed</p>
-            <p className="reveal-text">{state.guessText}</p>
-          </div>
-        </div>
-      </div>
+      )}
+
+      {isChoice && isExactMatch && (
+        <div className="match-badge">Exact match</div>
+      )}
 
       <div className="score-line">
-        <p>Similarity: <strong>{Math.round(state.similarity * 100)}%</strong></p>
+        {!isChoice && (
+          <p>Similarity: <strong>{Math.round(state.similarity * 100)}%</strong></p>
+        )}
         <p>
           Points: <strong>+{state.points}</strong>
           {turn.multiplier > 1 && <span className="mult-note"> (2x applied)</span>}

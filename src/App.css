@@ -642,6 +642,121 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   }
 }
 
+.option-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .option-grid { grid-template-columns: 1fr; }
+}
+
+.option-btn {
+  padding: 14px 14px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f4efff;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: transform 0.1s, border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  line-height: 1.3;
+}
+
+.option-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(213, 163, 255, 0.4);
+}
+
+.option-btn.selected {
+  background: linear-gradient(135deg, rgba(255, 121, 176, 0.35), rgba(160, 102, 255, 0.35));
+  border-color: #d5a3ff;
+  box-shadow: 0 8px 20px rgba(160, 102, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.choice-reveal {
+  display: grid;
+  gap: 10px;
+  margin: 6px 0 14px;
+}
+
+.choice-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #ddd4ee;
+}
+
+.choice-pill.is-answer {
+  border-color: rgba(255, 179, 217, 0.6);
+  background: linear-gradient(135deg, rgba(255, 121, 176, 0.18), rgba(255, 121, 176, 0.05));
+  color: #fff;
+}
+
+.choice-pill.is-guess {
+  border-color: rgba(155, 182, 255, 0.6);
+  background: linear-gradient(135deg, rgba(120, 150, 255, 0.18), rgba(120, 150, 255, 0.05));
+  color: #fff;
+}
+
+.choice-pill.is-answer.is-guess {
+  border-color: #7de0a6;
+  background: linear-gradient(135deg, rgba(125, 224, 166, 0.25), rgba(125, 224, 166, 0.08));
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(125, 224, 166, 0.2);
+}
+
+.choice-text {
+  font-weight: 500;
+  flex: 1;
+}
+
+.choice-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.choice-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.tag-answer {
+  background: rgba(255, 121, 176, 0.22);
+  color: #ffb3d9;
+  border: 1px solid rgba(255, 121, 176, 0.4);
+}
+
+.tag-guess {
+  background: rgba(120, 150, 255, 0.22);
+  color: #b9c8ff;
+  border: 1px solid rgba(120, 150, 255, 0.4);
+}
+
+.match-badge {
+  display: inline-block;
+  margin: 4px 0 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(125, 224, 166, 0.25), rgba(125, 224, 166, 0.08));
+  border: 1px solid rgba(125, 224, 166, 0.5);
+  color: #b8f0ce;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
 .env-block {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.1);
