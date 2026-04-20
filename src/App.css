@@ -579,3 +579,15 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   gap: 6px;
 }
 .footer .sep { opacity: 0.5; }
+
+.env-block {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #e6defb;
+  font-size: 0.85rem;
+  font-family: ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}

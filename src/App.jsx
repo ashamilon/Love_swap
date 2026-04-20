@@ -1,6 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { useRoom } from './lib/useRoom.js'
+import { isSupabaseConfigured } from './lib/supabase.js'
+
+function MissingConfigScreen() {
+  return (
+    <main className="app-shell">
+      <div className="glow-bg" aria-hidden="true" />
+      <section className="panel">
+        <header className="panel-header">
+          <h1>Setup needed</h1>
+          <p className="tagline">This deployment is missing its Supabase keys.</p>
+        </header>
+        <p className="subtle">
+          Add these environment variables in your host (Vercel: Settings -&gt;
+          Environment Variables), then redeploy without build cache:
+        </p>
+        <pre className="env-block">
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
+        </pre>
+        <p className="subtle">
+          Vite bakes VITE_* variables into the bundle at build time, so they
+          must exist when the build runs.
+        </p>
+      </section>
+    </main>
+  )
+}
 
 function MenuScreen({ onCreate, onJoin, connecting, error }) {
   const [name, setName] = useState('')
@@ -526,6 +553,13 @@ function DisconnectedBanner({ partnerOnline, partner, phase }) {
 }
 
 function App() {
+  if (!isSupabaseConfigured) {
+    return <MissingConfigScreen />
+  }
+  return <AppInner />
+}
+
+function AppInner() {
   const room = useRoom()
   const {
     mode,
