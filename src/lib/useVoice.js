@@ -7,15 +7,19 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ]
 
-// WebRTC voice chat between the two players.
-// Signaling runs over a separate Supabase Realtime channel so it doesn't
-// interfere with the game state channel. Audio travels peer-to-peer.
+// WebRTC voice / video chat between the two players.
+// Signaling runs over a separate Supabase Realtime channel so it does not
+// interfere with the game state channel. Media travels peer-to-peer.
 export function useVoice({ roomCode, role }) {
   const [enabled, setEnabled] = useState(false)
+  const [hasVideo, setHasVideo] = useState(false)
+  const [cameraOn, setCameraOn] = useState(false)
   const [status, setStatus] = useState('idle')
   // idle | requesting | waiting | connecting | connected | muted | denied | failed
   const [muted, setMuted] = useState(false)
   const [error, setError] = useState('')
+  const [localStream, setLocalStream] = useState(null)
+  const [remoteStream, setRemoteStream] = useState(null)
 
   const pcRef = useRef(null)
   const localStreamRef = useRef(null)
@@ -43,12 +47,17 @@ export function useVoice({ roomCode, role }) {
     }
     partnerReadyRef.current = false
     offerSentRef.current = false
+    setLocalStream(null)
+    setRemoteStream(null)
+    setHasVideo(false)
+    setCameraOn(false)
     setMuted(false)
     setStatus('idle')
   }, [])
 
-  const enable = useCallback(async () => {
+  const enable = useCallback(async (options = {}) => {
     if (!roomCode || !role) return
+    const withVideo = !!options.video
     setError('')
     try {
       setStatus('requesting')
@@ -58,9 +67,19 @@ export function useVoice({ roomCode, role }) {
           noiseSuppression: true,
           autoGainControl: true,
         },
-        video: false,
+        video: withVideo
+          ? {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: 'user',
+              frameRate: { ideal: 24, max: 30 },
+            }
+          : false,
       })
       localStreamRef.current = stream
+      setLocalStream(stream)
+      setHasVideo(withVideo)
+      setCameraOn(withVideo)
 
       const isInitiator = role === 'host'
       isInitiatorRef.current = isInitiator
@@ -71,8 +90,10 @@ export function useVoice({ roomCode, role }) {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
 
       pc.ontrack = (event) => {
+        const remote = event.streams[0]
+        setRemoteStream(remote)
         if (audioRef.current) {
-          audioRef.current.srcObject = event.streams[0]
+          audioRef.current.srcObject = remote
           const playPromise = audioRef.current.play?.()
           if (playPromise && playPromise.catch) playPromise.catch(() => {})
         }
@@ -173,7 +194,7 @@ export function useVoice({ roomCode, role }) {
       })
     } catch (e) {
       console.error('voice enable failed', e)
-      setError(e?.message || 'Voice error')
+      setError(e?.message || 'Media error')
       if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') {
         setStatus('denied')
       } else {
@@ -203,19 +224,35 @@ export function useVoice({ roomCode, role }) {
     })
   }, [muted])
 
-  // When room changes or unmounts, tear down fully.
+  const toggleCamera = useCallback(() => {
+    const stream = localStreamRef.current
+    if (!stream) return
+    const tracks = stream.getVideoTracks()
+    if (!tracks.length) return
+    const next = !cameraOn
+    tracks.forEach((t) => {
+      t.enabled = next
+    })
+    setCameraOn(next)
+  }, [cameraOn])
+
   useEffect(() => {
     return () => teardown()
   }, [teardown, roomCode])
 
   return {
     enabled,
+    hasVideo,
+    cameraOn,
     status,
     muted,
     error,
+    localStream,
+    remoteStream,
     enable,
     disable,
     toggleMute,
+    toggleCamera,
     audioRef,
   }
 }

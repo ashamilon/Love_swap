@@ -34,6 +34,7 @@ export const INITIAL_STATE = {
   gameType: 'questions', // 'questions' | 'ludo'
   config: { mode: 'flirty', spice: 3, rounds: 5, doublePoints: true },
   players: { host: null, guest: null },
+  visibility: 'private', // 'private' | 'public' | 'stranger'
 
   // question game state
   turns: [],
@@ -48,6 +49,9 @@ export const INITIAL_STATE = {
 
   // ludo state
   ludo: null,
+
+  // chat (ephemeral; cleared when room ends)
+  chat: [],
 }
 
 function initLudo() {
@@ -184,6 +188,21 @@ function reduce(state, action) {
     case 'SET_GAME_TYPE':
       if (state.phase !== 'lobby') return state
       return { ...state, gameType: action.gameType }
+    case 'SEND_CHAT': {
+      const text = typeof action.text === 'string' ? action.text.trim().slice(0, 500) : ''
+      if (!text) return state
+      const entry = {
+        id: `${action.who}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        from: action.who,
+        fromName: action.fromName || action.who,
+        text,
+        ts: Date.now(),
+      }
+      const next = [...(state.chat || []), entry].slice(-80)
+      return { ...state, chat: next }
+    }
+    case 'CLEAR_CHAT':
+      return { ...state, chat: [] }
     case 'START_GAME':
       if (!state.players.guest) return state
       if (state.gameType === 'ludo') {
@@ -568,21 +587,26 @@ export function useRoom() {
   )
 
   const createRoom = useCallback(
-    async (name) => {
-      if (!name.trim()) return
+    async (name, options = {}) => {
+      if (!name.trim()) return null
       setError('')
       setConnecting(true)
-      const code = generateRoomCode()
+      const code = options.code || generateRoomCode()
       const player = { id: generatePlayerId(), name: name.trim() }
+      const visibility = options.visibility || 'private'
+      const configOverride = options.config || {}
       setRoomCode(code)
       setRole('host')
       roleRef.current = 'host'
       setMode('hosting')
       applyLocally({
         ...INITIAL_STATE,
+        visibility,
+        config: { ...INITIAL_STATE.config, ...configOverride },
         players: { host: player, guest: null },
       })
       setupChannel(code, 'host', player)
+      return code
     },
     [applyLocally, setupChannel],
   )

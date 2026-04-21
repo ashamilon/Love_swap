@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { useRoom } from './lib/useRoom.js'
 import { useVoice } from './lib/useVoice.js'
+import { useLobby } from './lib/useLobby.js'
+import { useMatchmaking } from './lib/useMatchmaking.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 import { formatQuestion } from './data/questions.js'
 import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
@@ -31,19 +33,127 @@ async function compressImage(file, maxDim = 480, quality = 0.65) {
   return canvas.toDataURL('image/jpeg', quality)
 }
 
+function StreamVideo({ stream, muted, mirror, className }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (stream) {
+      el.srcObject = stream
+      const p = el.play?.()
+      if (p && p.catch) p.catch(() => {})
+    } else {
+      el.srcObject = null
+    }
+  }, [stream])
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted={muted}
+      className={className}
+      style={mirror ? { transform: 'scaleX(-1)' } : undefined}
+    />
+  )
+}
+
+function VideoCallPanel({ voice, partnerName }) {
+  const {
+    muted, cameraOn, status,
+    localStream, remoteStream,
+    toggleMute, toggleCamera, disable,
+  } = voice
+  const [minimized, setMinimized] = useState(false)
+
+  const statusText = (() => {
+    switch (status) {
+      case 'requesting': return 'Asking permissions...'
+      case 'waiting': return partnerName ? `Waiting for ${partnerName}...` : 'Waiting for partner...'
+      case 'connecting': return 'Connecting...'
+      case 'connected': return partnerName ? `On call with ${partnerName}` : 'Connected'
+      case 'muted': return 'You are muted'
+      case 'failed': return 'Call disconnected'
+      default: return status
+    }
+  })()
+
+  const hasRemoteVideo = remoteStream && remoteStream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live')
+
+  return (
+    <div className={`video-panel ${minimized ? 'minimized' : ''}`}>
+      <div className="video-remote">
+        {remoteStream ? (
+          <StreamVideo stream={remoteStream} muted={false} className="remote-video" />
+        ) : (
+          <div className="video-placeholder">
+            <div className="placeholder-glow" />
+            <p>{statusText}</p>
+          </div>
+        )}
+        {!hasRemoteVideo && remoteStream && (
+          <div className="video-overlay">
+            <p>{partnerName || 'Partner'} turned camera off</p>
+          </div>
+        )}
+        {cameraOn && localStream && (
+          <div className="video-local">
+            <StreamVideo stream={localStream} muted mirror className="local-video" />
+          </div>
+        )}
+        <div className="video-header">
+          <span className="video-title">{partnerName || 'Video call'}</span>
+          <button
+            className="icon-btn"
+            onClick={() => setMinimized((v) => !v)}
+            aria-label={minimized ? 'Expand' : 'Minimize'}
+          >
+            {minimized ? '\u2922' : '\u2012'}
+          </button>
+        </div>
+        <div className="video-controls">
+          <button
+            className={`round-btn ${muted ? 'danger' : ''}`}
+            onClick={() => { sfx.click(); toggleMute() }}
+            title={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '\uD83D\uDD07' : '\uD83C\uDFA4'}
+          </button>
+          <button
+            className={`round-btn ${cameraOn ? '' : 'danger'}`}
+            onClick={() => { sfx.click(); toggleCamera() }}
+            title={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+          >
+            {cameraOn ? '\uD83D\uDCF9' : '\uD83D\uDEAB'}
+          </button>
+          <button
+            className="round-btn hangup"
+            onClick={() => { sfx.click(); disable() }}
+            title="End call"
+          >
+            {'\u260E'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function VoiceControls({ voice, partnerName, highlight }) {
-  const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
+  const {
+    enabled, hasVideo, status, muted, error, enable, disable, toggleMute, audioRef,
+  } = voice
 
   const statusLabel = (() => {
     switch (status) {
-      case 'idle': return 'Voice chat: OFF'
-      case 'requesting': return 'Asking mic...'
+      case 'idle': return 'Voice / video: OFF'
+      case 'requesting': return 'Asking permissions...'
       case 'waiting': return partnerName ? `Waiting for ${partnerName}...` : 'Waiting for partner...'
-      case 'connecting': return 'Connecting voice...'
-      case 'connected': return partnerName ? `On call with ${partnerName}` : 'Voice connected'
+      case 'connecting': return 'Connecting...'
+      case 'connected': return partnerName ? `On call with ${partnerName}` : 'Connected'
       case 'muted': return 'You are muted'
-      case 'denied': return 'Mic permission denied'
-      case 'failed': return 'Voice failed'
+      case 'denied': return 'Permission denied'
+      case 'failed': return 'Call failed'
       default: return status
     }
   })()
@@ -57,6 +167,15 @@ function VoiceControls({ voice, partnerName, highlight }) {
 
   const attention = highlight && !enabled
 
+  if (enabled && hasVideo) {
+    return (
+      <>
+        <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+        <VideoCallPanel voice={voice} partnerName={partnerName} />
+      </>
+    )
+  }
+
   return (
     <div className={`voice-bar ${attention ? 'pulse' : ''}`}>
       <audio ref={audioRef} autoPlay playsInline />
@@ -69,49 +188,130 @@ function VoiceControls({ voice, partnerName, highlight }) {
       </div>
       <div className="voice-actions">
         {!enabled ? (
-          <button
-            className="cta small voice-enable"
-            onClick={() => {
-              sfx.click()
-              enable()
-            }}
-            disabled={status === 'requesting'}
-          >
-            <span className="mic-glyph" aria-hidden="true">{'\uD83C\uDFA4'}</span>
-            {status === 'requesting' ? 'Asking mic...' : 'Start voice chat'}
-          </button>
+          <>
+            <button
+              className="cta small voice-enable"
+              onClick={() => { sfx.click(); enable({ video: false }) }}
+              disabled={status === 'requesting'}
+              title="Audio only"
+            >
+              <span className="mic-glyph" aria-hidden="true">{'\uD83C\uDFA4'}</span>
+              Voice
+            </button>
+            <button
+              className="cta small video-enable"
+              onClick={() => { sfx.click(); enable({ video: true }) }}
+              disabled={status === 'requesting'}
+              title="Audio + video"
+            >
+              <span className="mic-glyph" aria-hidden="true">{'\uD83D\uDCF9'}</span>
+              Video
+            </button>
+          </>
         ) : (
           <>
             <button
               className={muted ? 'cta small' : 'ghost small'}
-              onClick={() => {
-                sfx.click()
-                toggleMute()
-              }}
+              onClick={() => { sfx.click(); toggleMute() }}
             >
-              {muted ? 'Unmute mic' : 'Mute mic'}
+              {muted ? 'Unmute' : 'Mute'}
             </button>
             <button
               className="ghost small"
-              onClick={() => {
-                sfx.click()
-                disable()
-              }}
+              onClick={() => { sfx.click(); disable() }}
             >
-              End call
+              End
             </button>
           </>
         )}
       </div>
       {error && status === 'denied' && (
         <p className="voice-error">
-          Browser blocked mic access. Enable it in your browser's site settings and try again.
+          Browser blocked camera / mic. Enable it in your browser's site settings and try again.
         </p>
       )}
       {error && status === 'failed' && (
-        <p className="voice-error">Could not connect voice. Check your network and try again.</p>
+        <p className="voice-error">Could not connect. Check your network and try again.</p>
       )}
     </div>
+  )
+}
+
+function ChatPanel({ state, role, me, dispatch }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [unread, setUnread] = useState(0)
+  const listRef = useRef(null)
+  const messages = state.chat || []
+  const lastSeenRef = useRef(0)
+
+  useEffect(() => {
+    if (open) {
+      setUnread(0)
+      lastSeenRef.current = messages.length
+      if (listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight
+      }
+    } else {
+      const newMsgs = messages.slice(lastSeenRef.current).filter((m) => m.from !== role)
+      if (newMsgs.length) setUnread((u) => u + newMsgs.length)
+      lastSeenRef.current = messages.length
+    }
+  }, [messages, open, role])
+
+  const send = (e) => {
+    e.preventDefault()
+    const trimmed = text.trim()
+    if (!trimmed) return
+    dispatch({
+      type: 'SEND_CHAT',
+      who: role,
+      fromName: me?.name || (role === 'host' ? 'Host' : 'Guest'),
+      text: trimmed,
+    })
+    setText('')
+  }
+
+  return (
+    <>
+      <button
+        className={`chat-fab ${unread ? 'has-unread' : ''}`}
+        onClick={() => { sfx.click(); setOpen((v) => !v) }}
+        aria-label="Chat"
+      >
+        {'\uD83D\uDCAC'}
+        {unread > 0 && <span className="chat-badge">{unread > 9 ? '9+' : unread}</span>}
+      </button>
+      {open && (
+        <div className="chat-panel">
+          <div className="chat-header">
+            <span>Chat</span>
+            <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Close">{'\u2715'}</button>
+          </div>
+          <div className="chat-list" ref={listRef}>
+            {messages.length === 0 && (
+              <p className="chat-empty">Say hi! Messages are cleared when the room ends.</p>
+            )}
+            {messages.map((m) => (
+              <div key={m.id} className={`chat-msg ${m.from === role ? 'mine' : 'theirs'}`}>
+                {m.from !== role && <div className="chat-from">{m.fromName}</div>}
+                <div className="chat-text">{m.text}</div>
+              </div>
+            ))}
+          </div>
+          <form className="chat-form" onSubmit={send}>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type a message..."
+              maxLength={500}
+              autoFocus
+            />
+            <button type="submit" className="cta small" disabled={!text.trim()}>Send</button>
+          </form>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -141,41 +341,132 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
   )
 }
 
-function MenuScreen({ onCreate, onJoin, connecting, error }) {
+function AgeGateModal({ onAccept, onCancel }) {
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+        <h2>18+ Check</h2>
+        <p>
+          Stranger matching pairs you with someone you don't know. The game includes
+          flirty and spicy prompts. You must be 18 or older to continue.
+        </p>
+        <ul className="rules-list">
+          <li>Never share personal info (full name, address, money, links).</li>
+          <li>Use the Skip button anytime to end a match.</li>
+          <li>If someone makes you uncomfortable, tap Block + Skip.</li>
+          <li>Don't expect real-name introductions here. Use a nickname.</li>
+        </ul>
+        <div className="modal-actions">
+          <button className="ghost" onClick={onCancel}>Cancel</button>
+          <button
+            className="cta"
+            onClick={() => {
+              try { localStorage.setItem('love_swap_18plus', '1') } catch (e) { void e }
+              onAccept()
+            }}
+          >
+            I am 18+ and agree
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PublicRoomsList({ rooms, onJoin, nickname, connecting }) {
+  const list = rooms
+    .filter((r) => !r.code || r.code.length)
+    .sort((a, b) => (b.seenAt || 0) - (a.seenAt || 0))
+
+  if (!list.length) {
+    return (
+      <div className="public-empty">
+        <div className="spinner" />
+        <p>No public rooms right now. Create one, or check back in a moment.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="public-list">
+      {list.map((r) => (
+        <div key={r.code} className="public-room">
+          <div className="pr-main">
+            <div className="pr-host">{r.hostName || 'Host'}</div>
+            <div className="pr-meta">
+              <span className="badge">{r.mode}</span>
+              <span className="badge">spice {r.spice}</span>
+              <span className="badge dim">{r.gameType === 'ludo' ? 'Love Ludo' : 'Questions'}</span>
+            </div>
+          </div>
+          <button
+            className="cta small"
+            disabled={!nickname.trim() || connecting}
+            onClick={() => {
+              sfx.click()
+              onJoin(nickname, r.code)
+            }}
+          >
+            Join
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MenuScreen({
+  onCreate,
+  onJoin,
+  onStartStranger,
+  connecting,
+  error,
+  publicRooms,
+  matchStatus,
+  onStopMatch,
+}) {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [visibility, setVisibility] = useState('private')
   const [tab, setTab] = useState('create')
+  const [showAgeGate, setShowAgeGate] = useState(false)
+  const [strangerNickname, setStrangerNickname] = useState('')
+
+  const confirmStranger = () => {
+    if (!strangerNickname.trim()) return
+    let ageOk = false
+    try { ageOk = localStorage.getItem('love_swap_18plus') === '1' } catch { ageOk = false }
+    if (!ageOk) {
+      setShowAgeGate(true)
+      return
+    }
+    primeAudio()
+    sfx.lock()
+    onStartStranger(strangerNickname.trim())
+  }
 
   return (
     <section className="panel">
       <header className="panel-header">
         <h1>Love Swap</h1>
-        <p className="tagline">A long-distance game for one couple. Who reads their partner better?</p>
+        <p className="tagline">Play private with your partner, or meet someone new.</p>
       </header>
 
-      <div className="tabs">
-        <button
-          className={tab === 'create' ? 'tab active' : 'tab'}
-          onClick={() => setTab('create')}
-        >
-          Create room
-        </button>
-        <button
-          className={tab === 'join' ? 'tab active' : 'tab'}
-          onClick={() => setTab('join')}
-        >
-          Join room
-        </button>
+      <div className="tabs tabs-wrap">
+        <button className={tab === 'create' ? 'tab active' : 'tab'} onClick={() => setTab('create')}>Create</button>
+        <button className={tab === 'join' ? 'tab active' : 'tab'} onClick={() => setTab('join')}>Join by code</button>
+        <button className={tab === 'public' ? 'tab active' : 'tab'} onClick={() => setTab('public')}>Public rooms</button>
+        <button className={tab === 'stranger' ? 'tab active' : 'tab'} onClick={() => setTab('stranger')}>Stranger match</button>
       </div>
 
-      {tab === 'create' ? (
+      {tab === 'create' && (
         <form
           className="form-grid"
           onSubmit={(e) => {
             e.preventDefault()
             primeAudio()
             sfx.lock()
-            onCreate(name)
+            onCreate(name, { visibility })
           }}
         >
           <label>
@@ -188,12 +479,38 @@ function MenuScreen({ onCreate, onJoin, connecting, error }) {
               maxLength={24}
             />
           </label>
-          <button type="submit" className="cta" disabled={connecting}>
+          <div className="visibility-row">
+            <button
+              type="button"
+              className={`vis-card ${visibility === 'private' ? 'selected' : ''}`}
+              onClick={() => setVisibility('private')}
+            >
+              <div className="vis-icon">{'\uD83D\uDD12'}</div>
+              <div className="vis-title">Private</div>
+              <div className="vis-desc">Only someone with your code can join.</div>
+            </button>
+            <button
+              type="button"
+              className={`vis-card ${visibility === 'public' ? 'selected' : ''}`}
+              onClick={() => setVisibility('public')}
+            >
+              <div className="vis-icon">{'\uD83C\uDF10'}</div>
+              <div className="vis-title">Public</div>
+              <div className="vis-desc">Listed on the Public rooms tab for anyone to join.</div>
+            </button>
+          </div>
+          <button type="submit" className="cta" disabled={connecting || !name.trim()}>
             {connecting ? 'Creating...' : 'Create room'}
           </button>
-          <p className="subtle">You will get a short room code to share with your partner.</p>
+          <p className="subtle">
+            {visibility === 'public'
+              ? 'Anyone can see and join your room until someone pairs up with you.'
+              : 'You will get a short room code to share.'}
+          </p>
         </form>
-      ) : (
+      )}
+
+      {tab === 'join' && (
         <form
           className="form-grid"
           onSubmit={(e) => {
@@ -230,12 +547,93 @@ function MenuScreen({ onCreate, onJoin, connecting, error }) {
         </form>
       )}
 
+      {tab === 'public' && (
+        <div className="form-grid">
+          <label>
+            Your name
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nickname"
+              maxLength={24}
+            />
+          </label>
+          <PublicRoomsList
+            rooms={publicRooms}
+            onJoin={onJoin}
+            nickname={name}
+            connecting={connecting}
+          />
+          <p className="subtle">
+            Listings refresh every few seconds. When a host gets a partner, their room disappears.
+          </p>
+        </div>
+      )}
+
+      {tab === 'stranger' && (
+        <div className="form-grid">
+          <p className="subtle">
+            Get matched with a random person. You'll land in a full Love Swap room together
+            with voice, video, and chat.
+          </p>
+          <label>
+            Nickname (not your real name)
+            <input
+              value={strangerNickname}
+              onChange={(e) => setStrangerNickname(e.target.value)}
+              placeholder="How strangers see you"
+              maxLength={20}
+            />
+          </label>
+          {matchStatus === 'idle' || matchStatus === 'failed' ? (
+            <button
+              className="cta"
+              onClick={confirmStranger}
+              disabled={!strangerNickname.trim()}
+            >
+              {'\uD83C\uDFB2'} Find a stranger
+            </button>
+          ) : (
+            <div className="matchmaking-status">
+              <div className="spinner" />
+              <div>
+                <strong>
+                  {matchStatus === 'searching' && 'Looking for someone...'}
+                  {matchStatus === 'pairing' && 'Found someone! Pairing...'}
+                  {matchStatus === 'matched' && 'Matched! Starting room...'}
+                </strong>
+                <p className="subtle">This usually takes a few seconds.</p>
+              </div>
+              <button className="ghost small" onClick={onStopMatch}>Cancel</button>
+            </div>
+          )}
+          {matchStatus === 'failed' && (
+            <p className="error">Matching failed. Try again.</p>
+          )}
+          <p className="voice-error">
+            Safety: never share personal info. Skip / Block anyone who makes you uncomfortable.
+          </p>
+        </div>
+      )}
+
       {error && <p className="error">{error}</p>}
+
+      {showAgeGate && (
+        <AgeGateModal
+          onAccept={() => {
+            setShowAgeGate(false)
+            primeAudio()
+            sfx.lock()
+            onStartStranger(strangerNickname.trim())
+          }}
+          onCancel={() => setShowAgeGate(false)}
+        />
+      )}
     </section>
   )
 }
 
-function WaitingForPartnerScreen({ roomCode, onLeave, partnerOnline }) {
+function WaitingForPartnerScreen({ roomCode, onLeave, partnerOnline, visibility }) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(roomCode)
@@ -244,11 +642,20 @@ function WaitingForPartnerScreen({ roomCode, onLeave, partnerOnline }) {
     }
   }
 
+  const isPublic = visibility === 'public'
+  const isStranger = visibility === 'stranger'
+
   return (
     <section className="panel">
       <header className="panel-header">
-        <h1>Share your code</h1>
-        <p className="tagline">Send this to your partner. You both play from any device.</p>
+        <h1>{isStranger ? 'Finding a stranger...' : 'Share your code'}</h1>
+        <p className="tagline">
+          {isStranger
+            ? 'Hang tight, pairing you up.'
+            : isPublic
+              ? 'Your room is listed publicly. Anyone can join.'
+              : 'Send this to your partner. You both play from any device.'}
+        </p>
       </header>
 
       <div className="code-display">
@@ -257,6 +664,13 @@ function WaitingForPartnerScreen({ roomCode, onLeave, partnerOnline }) {
           Copy code
         </button>
       </div>
+
+      {isPublic && (
+        <div className="status-row">
+          <span className="badge">Public</span>
+          <span className="subtle">Listed in the Public rooms tab until someone joins.</span>
+        </div>
+      )}
 
       <div className="status-row">
         <span className={`dot ${partnerOnline ? 'online' : 'offline'}`} />
@@ -1565,14 +1979,66 @@ function AppInner() {
 
   const voice = useVoice({ roomCode, role })
 
+  const shouldAnnounce =
+    mode === 'hosting'
+    && state.visibility === 'public'
+    && !state.players.guest
+    && !!roomCode
+  const announce = useMemo(
+    () =>
+      shouldAnnounce
+        ? {
+            code: roomCode,
+            hostName: me?.name || 'Host',
+            mode: state.config.mode,
+            spice: state.config.spice,
+            gameType: state.gameType,
+          }
+        : null,
+    [shouldAnnounce, roomCode, me?.name, state.config.mode, state.config.spice, state.gameType],
+  )
+  const { rooms: publicRooms, closeAnnouncement } = useLobby({ announce })
+
+  useEffect(() => {
+    if (state.players.guest && roomCode) {
+      closeAnnouncement(roomCode)
+    }
+  }, [state.players.guest, roomCode, closeAnnouncement])
+
+  const [strangerNickname, setStrangerNickname] = useState('')
+  const matchmaking = useMatchmaking({
+    nickname: strangerNickname,
+    onMatched: ({ role: assignedRole, code, partnerName }) => {
+      if (assignedRole === 'host') {
+        createRoom(strangerNickname, {
+          code,
+          visibility: 'stranger',
+          config: { mode: 'fun', spice: 2 },
+        })
+      } else {
+        joinRoom(strangerNickname, code)
+      }
+      void partnerName
+    },
+  })
+
+  const onStartStranger = (nickname) => {
+    setStrangerNickname(nickname)
+    setTimeout(() => matchmaking.start(), 0)
+  }
+
   let content
   if (mode === 'menu') {
     content = (
       <MenuScreen
         onCreate={createRoom}
         onJoin={joinRoom}
+        onStartStranger={onStartStranger}
+        onStopMatch={matchmaking.stop}
+        matchStatus={matchmaking.status}
+        publicRooms={publicRooms}
         connecting={connecting}
-        error={error}
+        error={error || matchmaking.error}
       />
     )
   } else if (mode === 'hosting' && !state.players.guest) {
@@ -1581,6 +2047,7 @@ function AppInner() {
         roomCode={roomCode}
         partnerOnline={partnerOnline}
         onLeave={leaveRoom}
+        visibility={state.visibility}
       />
     )
   } else if (mode === 'joining' && !state.players.host) {
@@ -1618,7 +2085,12 @@ function AppInner() {
     )
   }
 
-  const showVoice = mode !== 'menu' && roomCode
+  const inRoom = mode !== 'menu' && roomCode
+  const showVoice = inRoom
+  const showChat = inRoom && role && state.players[role] && state.players[role === 'host' ? 'guest' : 'host']
+  const visibilityLabel = state.visibility === 'stranger'
+    ? 'Stranger'
+    : state.visibility === 'public' ? 'Public' : ''
 
   return (
     <main className="app-shell">
@@ -1637,12 +2109,21 @@ function AppInner() {
       )}
       <MuteToggle />
       {content}
+      {showChat && (
+        <ChatPanel state={state} role={role} me={me} dispatch={dispatch} />
+      )}
       <footer className="footer">
         <span>Love Swap</span>
-        {mode !== 'menu' && (
+        {inRoom && (
           <>
             <span className="sep">-</span>
             <span>Room {roomCode}</span>
+            {visibilityLabel && (
+              <>
+                <span className="sep">-</span>
+                <span>{visibilityLabel}</span>
+              </>
+            )}
           </>
         )}
       </footer>
