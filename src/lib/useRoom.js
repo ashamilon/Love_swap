@@ -54,6 +54,21 @@ export const INITIAL_STATE = {
   chat: [],
 }
 
+function emptyPlayerStats() {
+  return {
+    rolls: 0,
+    diceTotal: 0,
+    sixes: 0,
+    biggestRoll: 0,
+    heartsLanded: 0,
+    heartsMatched: 0,
+    capturesMade: 0,
+    capturesSuffered: 0,
+    daresCompleted: 0,
+    bonusMoves: 0,
+  }
+}
+
 function initLudo() {
   return {
     subphase: 'rolling', // rolling | event | done
@@ -64,6 +79,13 @@ function initLudo() {
     event: null,
     winner: null,
     log: [],
+    stats: {
+      startedAt: Date.now(),
+      endedAt: null,
+      turns: 0,
+      host: emptyPlayerStats(),
+      guest: emptyPlayerStats(),
+    },
   }
 }
 
@@ -80,9 +102,130 @@ function buildTurns(config) {
   }))
 }
 
+export function computeLudoAnalysis(ludo, players) {
+  if (!ludo || !ludo.stats) return null
+  const { stats } = ludo
+  const host = stats.host || emptyPlayerStats()
+  const guest = stats.guest || emptyPlayerStats()
+
+  const totalHearts = host.heartsLanded + guest.heartsLanded
+  const totalMatches = host.heartsMatched + guest.heartsMatched
+  const coupleAccuracy = totalHearts > 0
+    ? Math.round((totalMatches / totalHearts) * 100)
+    : 0
+  const hostRate = host.heartsLanded
+    ? Math.round((host.heartsMatched / host.heartsLanded) * 100)
+    : 0
+  const guestRate = guest.heartsLanded
+    ? Math.round((guest.heartsMatched / guest.heartsLanded) * 100)
+    : 0
+
+  const endedAt = stats.endedAt || Date.now()
+  const durationMs = endedAt - (stats.startedAt || endedAt)
+  const durationMin = Math.max(1, Math.round(durationMs / 60000))
+
+  let verdict, verdictTone
+  if (coupleAccuracy >= 90) { verdict = 'Soulmates'; verdictTone = 'soulmates' }
+  else if (coupleAccuracy >= 75) { verdict = 'Deeply in sync'; verdictTone = 'great' }
+  else if (coupleAccuracy >= 50) { verdict = 'Finding your groove'; verdictTone = 'good' }
+  else if (coupleAccuracy >= 25) { verdict = 'Still learning each other'; verdictTone = 'ok' }
+  else { verdict = 'Opposites attract'; verdictTone = 'spark' }
+
+  const hostName = players?.host?.name || 'Host'
+  const guestName = players?.guest?.name || 'Guest'
+  const awards = []
+
+  // Mind Reader — highest match rate (min 2 hearts landed to qualify)
+  if (host.heartsLanded >= 2 || guest.heartsLanded >= 2) {
+    if (hostRate > guestRate && host.heartsLanded >= 2) {
+      awards.push({ icon: '🧠', title: 'Mind Reader', holder: hostName, desc: `${hostRate}% heart match rate` })
+    } else if (guestRate > hostRate && guest.heartsLanded >= 2) {
+      awards.push({ icon: '🧠', title: 'Mind Reader', holder: guestName, desc: `${guestRate}% heart match rate` })
+    }
+  }
+
+  // Heartbreaker — most captures made
+  if (host.capturesMade !== guest.capturesMade) {
+    const who = host.capturesMade > guest.capturesMade ? 'host' : 'guest'
+    const num = who === 'host' ? host.capturesMade : guest.capturesMade
+    awards.push({ icon: '💔', title: 'Heartbreaker', holder: who === 'host' ? hostName : guestName, desc: `${num} capture${num === 1 ? '' : 's'}` })
+  }
+
+  // Dice Whisperer — most sixes
+  if (host.sixes !== guest.sixes && (host.sixes + guest.sixes) >= 2) {
+    const who = host.sixes > guest.sixes ? 'host' : 'guest'
+    const num = who === 'host' ? host.sixes : guest.sixes
+    awards.push({ icon: '🎲', title: 'Dice Whisperer', holder: who === 'host' ? hostName : guestName, desc: `${num} sixes rolled` })
+  }
+
+  // Lucky Streak — biggest single roll (only if 6)
+  const biggest = Math.max(host.biggestRoll, guest.biggestRoll)
+  if (biggest >= 6) {
+    const who = host.biggestRoll >= guest.biggestRoll ? 'host' : 'guest'
+    awards.push({ icon: '🍀', title: 'Lucky Streak', holder: who === 'host' ? hostName : guestName, desc: `Rolled a ${biggest}` })
+  }
+
+  // Romantic Magnet — most heart cells landed
+  if (host.heartsLanded !== guest.heartsLanded) {
+    const who = host.heartsLanded > guest.heartsLanded ? 'host' : 'guest'
+    const num = who === 'host' ? host.heartsLanded : guest.heartsLanded
+    awards.push({ icon: '💘', title: 'Romantic Magnet', holder: who === 'host' ? hostName : guestName, desc: `${num} heart cells landed` })
+  }
+
+  // Brave Soul — most dares completed
+  if (host.daresCompleted !== guest.daresCompleted && (host.daresCompleted + guest.daresCompleted) >= 1) {
+    const who = host.daresCompleted > guest.daresCompleted ? 'host' : 'guest'
+    const num = who === 'host' ? host.daresCompleted : guest.daresCompleted
+    awards.push({ icon: '📸', title: 'Brave Soul', holder: who === 'host' ? hostName : guestName, desc: `${num} dare${num === 1 ? '' : 's'} completed` })
+  }
+
+  // In Sync — couple award (shown if >= 70%)
+  if (coupleAccuracy >= 70 && totalHearts > 0) {
+    awards.push({ icon: '💞', title: 'In Sync', holder: 'Together', desc: `${coupleAccuracy}% couple accuracy` })
+  }
+
+  // Marathon — long game
+  if (stats.turns >= 30) {
+    awards.push({ icon: '🏃', title: 'Marathon', holder: 'Together', desc: `${stats.turns} total turns` })
+  }
+
+  return {
+    coupleAccuracy,
+    hostRate,
+    guestRate,
+    totalHearts,
+    totalMatches,
+    durationMin,
+    verdict,
+    verdictTone,
+    awards,
+    host,
+    guest,
+    turns: stats.turns,
+    hostName,
+    guestName,
+  }
+}
+
 function advanceTurn(ludo, who) {
   const opp = who === 'host' ? 'guest' : 'host'
   return { ...ludo, turn: opp, subphase: 'rolling', dice: ludo.dice }
+}
+
+function bumpRollStats(stats, who, dice) {
+  const prev = stats?.[who] || emptyPlayerStats()
+  const nextWho = {
+    ...prev,
+    rolls: prev.rolls + 1,
+    diceTotal: prev.diceTotal + dice,
+    sixes: prev.sixes + (dice === 6 ? 1 : 0),
+    biggestRoll: Math.max(prev.biggestRoll, dice),
+  }
+  return {
+    ...stats,
+    turns: (stats?.turns || 0) + 1,
+    [who]: nextWho,
+  }
 }
 
 function resolveRoll(state, who, dice) {
@@ -100,11 +243,22 @@ function resolveRoll(state, who, dice) {
     ...ludo.log,
   ].slice(0, 6)
 
+  const baseStats = bumpRollStats(ludo.stats, who, dice)
+
   // Win check
   if (newDistance >= WIN_DISTANCE) {
     return {
       ...state,
-      ludo: { ...ludo, dice, positions, distance, winner: who, subphase: 'done', log },
+      ludo: {
+        ...ludo,
+        dice,
+        positions,
+        distance,
+        winner: who,
+        subphase: 'done',
+        log,
+        stats: { ...baseStats, endedAt: Date.now() },
+      },
     }
   }
 
@@ -112,6 +266,11 @@ function resolveRoll(state, who, dice) {
   if (newPos === ludo.positions[opp]) {
     positions[opp] = START_CELLS[opp]
     distance[opp] = 0
+    const capStats = {
+      ...baseStats,
+      [who]: { ...baseStats[who], capturesMade: baseStats[who].capturesMade + 1 },
+      [opp]: { ...baseStats[opp], capturesSuffered: baseStats[opp].capturesSuffered + 1 },
+    }
     return {
       ...state,
       ludo: {
@@ -129,6 +288,7 @@ function resolveRoll(state, who, dice) {
           acked: { [opp]: false, [who]: false },
         },
         log: [{ t: Date.now(), text: `${who} captured ${opp}!` }, ...log].slice(0, 6),
+        stats: capStats,
       },
     }
   }
@@ -137,6 +297,10 @@ function resolveRoll(state, who, dice) {
   if (HEART_CELLS.includes(newPos)) {
     const question = pickHeartQuestion(state.config)
     const isChoice = question.type === 'choice'
+    const heartStats = {
+      ...baseStats,
+      [who]: { ...baseStats[who], heartsLanded: baseStats[who].heartsLanded + 1 },
+    }
     return {
       ...state,
       ludo: {
@@ -157,6 +321,7 @@ function resolveRoll(state, who, dice) {
           matched: null,
         },
         log: [{ t: Date.now(), text: `${who} landed on a heart cell` }, ...log].slice(0, 6),
+        stats: heartStats,
       },
     }
   }
@@ -174,6 +339,7 @@ function resolveRoll(state, who, dice) {
       turn: nextTurn,
       event: null,
       log,
+      stats: baseStats,
     },
   }
 }
@@ -317,9 +483,19 @@ function reduce(state, action) {
       if (!l || l.subphase !== 'event' || l.event?.kind !== 'capture') return state
       if (action.who !== l.event.captured) return state
       if (typeof action.dataUrl !== 'string' || !action.dataUrl.startsWith('data:image/')) return state
+      const hadPhoto = !!l.event.photo
+      const stats = hadPhoto
+        ? l.stats
+        : {
+            ...l.stats,
+            [action.who]: {
+              ...l.stats[action.who],
+              daresCompleted: l.stats[action.who].daresCompleted + 1,
+            },
+          }
       return {
         ...state,
-        ludo: { ...l, event: { ...l.event, photo: action.dataUrl } },
+        ludo: { ...l, stats, event: { ...l.event, photo: action.dataUrl } },
       }
     }
     case 'LUDO_CAPTURE_CLEAR_PHOTO': {
@@ -345,13 +521,25 @@ function reduce(state, action) {
       if (state.phase !== 'ludo') return state
       const l = state.ludo
       if (!l || l.event?.kind !== 'heart' || l.event.phase !== 'judging') return state
+      const matched = Boolean(action.matched)
+      const landed = l.event.landed
+      const stats = matched
+        ? {
+            ...l.stats,
+            [landed]: {
+              ...l.stats[landed],
+              heartsMatched: l.stats[landed].heartsMatched + 1,
+            },
+          }
+        : l.stats
       return {
         ...state,
         ludo: {
           ...l,
+          stats,
           event: {
             ...l.event,
-            matched: Boolean(action.matched),
+            matched,
             phase: 'reveal',
           },
         },
@@ -374,10 +562,21 @@ function reduce(state, action) {
       const guesser = l.event.landed === 'host' ? 'guest' : 'host'
       if (action.who !== guesser) return state
       const matched = action.choice === l.event.answer
+      const landed = l.event.landed
+      const stats = matched
+        ? {
+            ...l.stats,
+            [landed]: {
+              ...l.stats[landed],
+              heartsMatched: l.stats[landed].heartsMatched + 1,
+            },
+          }
+        : l.stats
       return {
         ...state,
         ludo: {
           ...l,
+          stats,
           event: { ...l.event, guess: action.choice, matched, phase: 'reveal' },
         },
       }
@@ -394,6 +593,10 @@ function reduce(state, action) {
         const newDist = l.distance[who] + 3
         const positions = { ...l.positions, [who]: newPos }
         const distance = { ...l.distance, [who]: newDist }
+        const statsAfterBonus = {
+          ...l.stats,
+          [who]: { ...l.stats[who], bonusMoves: l.stats[who].bonusMoves + 3 },
+        }
         if (newDist >= WIN_DISTANCE) {
           return {
             ...state,
@@ -404,6 +607,7 @@ function reduce(state, action) {
               winner: who,
               subphase: 'done',
               event: null,
+              stats: { ...statsAfterBonus, endedAt: Date.now() },
             },
           }
         }
@@ -416,6 +620,7 @@ function reduce(state, action) {
             subphase: 'rolling',
             turn: who,
             event: null,
+            stats: statsAfterBonus,
             log: [
               { t: Date.now(), text: `${who} matched the heart prompt +3` },
               ...l.log,

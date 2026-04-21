@@ -6,7 +6,7 @@ import { useLobby } from './lib/useLobby.js'
 import { useMatchmaking } from './lib/useMatchmaking.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 import { formatQuestion } from './data/questions.js'
-import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
+import { HEART_CELLS, START_CELLS, TRACK_SIZE, computeLudoAnalysis } from './lib/useRoom.js'
 import { sfx, isMuted, setMuted, primeAudio } from './lib/sounds.js'
 import {
   FloatingHearts,
@@ -1774,6 +1774,125 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
   )
 }
 
+function LudoAnalysis({ ludo, state, role }) {
+  const analysis = useMemo(
+    () => computeLudoAnalysis(ludo, state.players),
+    [ludo, state.players],
+  )
+  if (!analysis) return null
+  const {
+    coupleAccuracy, hostRate, guestRate, totalHearts, totalMatches,
+    durationMin, verdict, verdictTone, awards,
+    host, guest, turns, hostName, guestName,
+  } = analysis
+
+  const myStats = role === 'host' ? host : guest
+  const theirStats = role === 'host' ? guest : host
+  const myName = role === 'host' ? hostName : guestName
+  const theirName = role === 'host' ? guestName : hostName
+  const myRate = role === 'host' ? hostRate : guestRate
+  const theirRate = role === 'host' ? guestRate : hostRate
+
+  return (
+    <div className="ludo-analysis">
+      <div className={`love-score-card tone-${verdictTone}`}>
+        <div className="love-score-label">Love Sync</div>
+        <div className="love-score-value">
+          <span className="big-number">{coupleAccuracy}</span>
+          <span className="percent">%</span>
+        </div>
+        <div className="love-score-verdict">{verdict}</div>
+        <div className="love-score-bar">
+          <div className="lsb-fill" style={{ width: `${Math.min(100, coupleAccuracy)}%` }} />
+        </div>
+        <p className="subtle center small">
+          Based on {totalMatches}/{totalHearts} heart prompts matched as a couple.
+        </p>
+      </div>
+
+      <div className="analysis-grid">
+        <StatBox icon="⏱️" label="Duration" value={`${durationMin} min`} />
+        <StatBox icon="🔁" label="Total turns" value={turns} />
+        <StatBox icon="💖" label="Hearts landed" value={totalHearts} />
+        <StatBox icon="✨" label="Hearts matched" value={totalMatches} />
+        <StatBox icon="💥" label="Captures" value={host.capturesMade + guest.capturesMade} />
+        <StatBox icon="📸" label="Dares done" value={host.daresCompleted + guest.daresCompleted} />
+      </div>
+
+      <h3 className="analysis-heading">Player breakdown</h3>
+      <div className="player-breakdown">
+        <PlayerStatCard
+          name={myName}
+          isMe
+          rate={myRate}
+          stats={myStats}
+        />
+        <PlayerStatCard
+          name={theirName}
+          rate={theirRate}
+          stats={theirStats}
+        />
+      </div>
+
+      {awards.length > 0 && (
+        <>
+          <h3 className="analysis-heading">Awards</h3>
+          <div className="awards-grid">
+            {awards.map((a, i) => (
+              <div key={i} className="award-card">
+                <div className="award-icon">{a.icon}</div>
+                <div className="award-main">
+                  <div className="award-title">{a.title}</div>
+                  <div className="award-holder">{a.holder}</div>
+                  <div className="award-desc">{a.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function StatBox({ icon, label, value }) {
+  return (
+    <div className="stat-box">
+      <div className="stat-icon">{icon}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  )
+}
+
+function PlayerStatCard({ name, isMe, rate, stats }) {
+  return (
+    <div className={`player-stat-card ${isMe ? 'me' : ''}`}>
+      <div className="psc-head">
+        <strong>{name}</strong>
+        {isMe && <span className="psc-you">you</span>}
+      </div>
+      <div className="psc-rate">
+        <span className="psc-rate-num">{rate}%</span>
+        <span className="psc-rate-label">heart match</span>
+      </div>
+      <div className="psc-rate-bar">
+        <div className="psc-rate-fill" style={{ width: `${Math.min(100, rate)}%` }} />
+      </div>
+      <ul className="psc-list">
+        <li><span>Rolls</span><strong>{stats.rolls}</strong></li>
+        <li><span>Sixes</span><strong>{stats.sixes}</strong></li>
+        <li><span>Captures made</span><strong>{stats.capturesMade}</strong></li>
+        <li><span>Captures suffered</span><strong>{stats.capturesSuffered}</strong></li>
+        <li><span>Hearts landed</span><strong>{stats.heartsLanded}</strong></li>
+        <li><span>Hearts matched</span><strong>{stats.heartsMatched}</strong></li>
+        <li><span>Bonus moves</span><strong>+{stats.bonusMoves}</strong></li>
+        <li><span>Dares done</span><strong>{stats.daresCompleted}</strong></li>
+      </ul>
+    </div>
+  )
+}
+
 function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
   const ludo = state.ludo
 
@@ -1819,10 +1938,12 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
         </h1>
         <p className="subtle center">
           {iWon
-            ? 'First to lap the heart track. You read each other perfectly.'
+            ? 'First to lap the heart track.'
             : `${partner?.name} lapped the board first. Rematch?`}
         </p>
-        <LudoBoard ludo={ludo} hostName={hostName} guestName={guestName} />
+
+        <LudoAnalysis ludo={ludo} state={state} role={role} />
+
         <div className="final-actions">
           {role === 'host' && (
             <button className="cta" onClick={() => dispatch({ type: 'LUDO_RESTART' })}>
