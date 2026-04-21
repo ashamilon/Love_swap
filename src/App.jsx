@@ -7,16 +7,16 @@ import { formatQuestion } from './data/questions.js'
 import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
 import { sfx, isMuted, setMuted, primeAudio } from './lib/sounds.js'
 
-function VoiceControls({ voice, partnerName }) {
+function VoiceControls({ voice, partnerName, highlight }) {
   const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
 
   const statusLabel = (() => {
     switch (status) {
-      case 'idle': return 'Voice off'
+      case 'idle': return 'Voice chat: OFF'
       case 'requesting': return 'Asking mic...'
       case 'waiting': return partnerName ? `Waiting for ${partnerName}...` : 'Waiting for partner...'
       case 'connecting': return 'Connecting voice...'
-      case 'connected': return partnerName ? `Talking with ${partnerName}` : 'Voice connected'
+      case 'connected': return partnerName ? `On call with ${partnerName}` : 'Voice connected'
       case 'muted': return 'You are muted'
       case 'denied': return 'Mic permission denied'
       case 'failed': return 'Voice failed'
@@ -31,29 +31,50 @@ function VoiceControls({ voice, partnerName }) {
     return 'offline'
   })()
 
+  const attention = highlight && !enabled
+
   return (
-    <div className="voice-bar">
+    <div className={`voice-bar ${attention ? 'pulse' : ''}`}>
       <audio ref={audioRef} autoPlay playsInline />
       <div className="voice-status">
+        <span className="voice-icon" aria-hidden="true">
+          {enabled ? (muted ? '\uD83D\uDD07' : '\uD83C\uDFA4') : '\uD83C\uDFA4'}
+        </span>
         <span className={`dot ${dotClass}`} />
-        <span>{statusLabel}</span>
+        <span className="voice-label">{statusLabel}</span>
       </div>
       <div className="voice-actions">
         {!enabled ? (
           <button
-            className="cta small"
-            onClick={enable}
+            className="cta small voice-enable"
+            onClick={() => {
+              sfx.click()
+              enable()
+            }}
             disabled={status === 'requesting'}
           >
-            {status === 'requesting' ? 'Requesting...' : 'Enable voice'}
+            <span className="mic-glyph" aria-hidden="true">{'\uD83C\uDFA4'}</span>
+            {status === 'requesting' ? 'Asking mic...' : 'Start voice chat'}
           </button>
         ) : (
           <>
-            <button className={muted ? 'cta small' : 'ghost small'} onClick={toggleMute}>
-              {muted ? 'Unmute' : 'Mute'}
+            <button
+              className={muted ? 'cta small' : 'ghost small'}
+              onClick={() => {
+                sfx.click()
+                toggleMute()
+              }}
+            >
+              {muted ? 'Unmute mic' : 'Mute mic'}
             </button>
-            <button className="ghost small" onClick={disable}>
-              Hang up
+            <button
+              className="ghost small"
+              onClick={() => {
+                sfx.click()
+                disable()
+              }}
+            >
+              End call
             </button>
           </>
         )}
@@ -975,15 +996,27 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
             ))}
           </div>
         )}
+        <div className="voice-hint">
+          <span className="voice-hint-icon">{'\uD83C\uDFA4'}</span>
+          <div>
+            <strong>Use voice chat for this prompt.</strong>
+            <div className="voice-hint-sub">
+              Tap <em>Start voice chat</em> in the top-right corner (both partners need to enable it).
+            </div>
+          </div>
+        </div>
         <p className="subtle">
           {iLanded
-            ? `Say your answer out loud to ${partner?.name} (use voice chat above). When done, they decide if they matched your vibe.`
-            : `${partner?.name} will say their answer aloud. Listen on voice, then judge if you matched.`}
+            ? `Say your answer out loud to ${partner?.name} over the call. When done, they decide if you matched their vibe.`
+            : `${partner?.name} will say their answer aloud on the call. Listen, then judge if they matched.`}
         </p>
         {iLanded ? (
           <button
             className="cta"
-            onClick={() => dispatch({ type: 'LUDO_HEART_BEGIN_JUDGING' })}
+            onClick={() => {
+              sfx.click()
+              dispatch({ type: 'LUDO_HEART_BEGIN_JUDGING' })
+            }}
           >
             I said it — let {partner?.name} judge
           </button>
@@ -1006,13 +1039,19 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
           <div className="judge-row">
             <button
               className="cta match"
-              onClick={() => dispatch({ type: 'LUDO_HEART_JUDGE', matched: true })}
+              onClick={() => {
+                sfx.match()
+                dispatch({ type: 'LUDO_HEART_JUDGE', matched: true })
+              }}
             >
               Perfect match (+3 move)
             </button>
             <button
               className="ghost"
-              onClick={() => dispatch({ type: 'LUDO_HEART_JUDGE', matched: false })}
+              onClick={() => {
+                sfx.miss()
+                dispatch({ type: 'LUDO_HEART_JUDGE', matched: false })
+              }}
             >
               Close but no
             </button>
@@ -1300,7 +1339,13 @@ function AppInner() {
         partner={partner}
         phase={state.phase}
       />
-      {showVoice && <VoiceControls voice={voice} partnerName={partner?.name} />}
+      {showVoice && (
+        <VoiceControls
+          voice={voice}
+          partnerName={partner?.name}
+          highlight={state.phase === 'ludo' && state.ludo?.event?.kind === 'heart'}
+        />
+      )}
       <MuteToggle />
       {content}
       <footer className="footer">
