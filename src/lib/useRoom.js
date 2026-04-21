@@ -301,58 +301,15 @@ function reduce(state, action) {
       if (state.phase !== 'ludo') return state
       const l = state.ludo
       if (!l || l.event?.kind !== 'heart' || l.event.phase !== 'judging') return state
-      const matched = Boolean(action.matched)
-      const who = l.event.landed
-      if (matched) {
-        // bonus +3 move
-        const oldPos = l.positions[who]
-        const newPos = (oldPos + 3) % TRACK_SIZE
-        const newDist = l.distance[who] + 3
-        const positions = { ...l.positions, [who]: newPos }
-        const distance = { ...l.distance, [who]: newDist }
-        if (newDist >= WIN_DISTANCE) {
-          return {
-            ...state,
-            ludo: {
-              ...l,
-              positions,
-              distance,
-              winner: who,
-              subphase: 'done',
-              event: null,
-            },
-          }
-        }
-        // extra turn for matching
-        return {
-          ...state,
-          ludo: {
-            ...l,
-            positions,
-            distance,
-            subphase: 'rolling',
-            turn: who,
-            event: null,
-            log: [
-              { t: Date.now(), text: `${who} matched the heart prompt +3` },
-              ...l.log,
-            ].slice(0, 6),
-          },
-        }
-      }
-      // no match, pass turn to opponent (unless dice was 6)
-      const opp = who === 'host' ? 'guest' : 'host'
       return {
         ...state,
         ludo: {
           ...l,
-          subphase: 'rolling',
-          turn: l.dice === 6 ? who : opp,
-          event: null,
-          log: [
-            { t: Date.now(), text: `${who} missed the heart prompt` },
-            ...l.log,
-          ].slice(0, 6),
+          event: {
+            ...l.event,
+            matched: Boolean(action.matched),
+            phase: 'reveal',
+          },
         },
       }
     }

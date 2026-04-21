@@ -973,7 +973,7 @@ function LudoCaptureEvent({ ludo, role, me, partner, dispatch }) {
   )
 }
 
-function LudoHeartChoiceEvent({ event, ludo, role, me, partner, dispatch }) {
+function LudoHeartChoiceEvent({ event, role, me, partner, dispatch }) {
   const iLanded = event.landed === role
   const iGuess = !iLanded
   const responderName = iLanded ? me?.name : partner?.name
@@ -1050,10 +1050,9 @@ function LudoHeartChoiceEvent({ event, ludo, role, me, partner, dispatch }) {
     )
   }
 
-  // reveal phase
-  const iHost = role === 'host'
+  // reveal phase (choice)
   return (
-    <div className="ludo-event heart">
+    <div className={`ludo-event heart reveal-box ${event.matched ? 'is-match' : 'is-miss'}`}>
       <h2>{event.matched ? '♥ Matched!' : '♥ Not quite'}</h2>
       <h3 className="question">{questionText}</h3>
       <ChoiceRevealGrid
@@ -1064,23 +1063,21 @@ function LudoHeartChoiceEvent({ event, ludo, role, me, partner, dispatch }) {
         guesserName={guesserName}
       />
       {event.matched ? (
-        <p className="match-badge">Exact match - {responderName} gets +3 move</p>
+        <p className="match-badge">Exact match - {responderName} gets +3 move and an extra roll</p>
       ) : (
-        <p className="subtle center">Missed it. Turn goes to {event.landed === 'host' ? partner?.name : me?.name}.</p>
+        <p className="subtle center">
+          Missed it. Turn goes to {event.landed === 'host' ? partner?.name : me?.name}.
+        </p>
       )}
-      {iHost ? (
-        <button
-          className="cta"
-          onClick={() => {
-            sfx.click()
-            dispatch({ type: 'LUDO_HEART_CONTINUE' })
-          }}
-        >
-          Continue
-        </button>
-      ) : (
-        <p className="subtle center">Waiting for host to continue...</p>
-      )}
+      <button
+        className="cta"
+        onClick={() => {
+          sfx.click()
+          dispatch({ type: 'LUDO_HEART_CONTINUE' })
+        }}
+      >
+        Continue
+      </button>
     </div>
   )
 }
@@ -1093,7 +1090,6 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
     return (
       <LudoHeartChoiceEvent
         event={event}
-        ludo={ludo}
         role={role}
         me={me}
         partner={partner}
@@ -1146,39 +1142,77 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
     )
   }
 
-  // judging phase (open questions only)
-  const iJudge = !iLanded
+  if (event.phase === 'judging') {
+    const iJudge = !iLanded
+    return (
+      <div className="ludo-event heart">
+        <h2>♥ Did you match?</h2>
+        <h3 className="question">{questionText}</h3>
+        {iJudge ? (
+          <>
+            <p className="subtle">Did {partner?.name}'s answer match how you'd describe it?</p>
+            <div className="judge-row">
+              <button
+                className="cta match"
+                onClick={() => {
+                  sfx.click()
+                  dispatch({ type: 'LUDO_HEART_JUDGE', matched: true })
+                }}
+              >
+                Perfect match (+3 move)
+              </button>
+              <button
+                className="ghost"
+                onClick={() => {
+                  sfx.click()
+                  dispatch({ type: 'LUDO_HEART_JUDGE', matched: false })
+                }}
+              >
+                Close but no
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="subtle center">Waiting for {partner?.name} to judge...</p>
+        )}
+      </div>
+    )
+  }
+
+  // reveal phase (open)
+  const partnerName = iLanded ? partner?.name : me?.name
   return (
-    <div className="ludo-event heart">
-      <h2>♥ Did you match?</h2>
+    <div className={`ludo-event heart reveal-box ${event.matched ? 'is-match' : 'is-miss'}`}>
+      <h2>{event.matched ? '♥ Matched!' : '♥ Not quite'}</h2>
       <h3 className="question">{questionText}</h3>
-      {iJudge ? (
+      {event.matched ? (
         <>
-          <p className="subtle">Did {partner?.name}'s answer match how you'd describe it?</p>
-          <div className="judge-row">
-            <button
-              className="cta match"
-              onClick={() => {
-                sfx.match()
-                dispatch({ type: 'LUDO_HEART_JUDGE', matched: true })
-              }}
-            >
-              Perfect match (+3 move)
-            </button>
-            <button
-              className="ghost"
-              onClick={() => {
-                sfx.miss()
-                dispatch({ type: 'LUDO_HEART_JUDGE', matched: false })
-              }}
-            >
-              Close but no
-            </button>
-          </div>
+          <p className="reaction center">
+            {iLanded
+              ? `${partner?.name} felt your answer. You get +3 move and an extra roll.`
+              : `You felt ${partner?.name}'s answer. They get +3 move and an extra roll.`}
+          </p>
+          <div className="match-badge">+3 move</div>
         </>
       ) : (
-        <p className="subtle center">Waiting for {partner?.name} to judge...</p>
+        <>
+          <p className="reaction center">
+            {iLanded
+              ? `${partner?.name} wasn't convinced. Turn goes to them.`
+              : `Close but not quite. Turn comes to you.`}
+          </p>
+          <p className="subtle center">Turn goes to {partnerName}.</p>
+        </>
       )}
+      <button
+        className="cta"
+        onClick={() => {
+          sfx.click()
+          dispatch({ type: 'LUDO_HEART_CONTINUE' })
+        }}
+      >
+        Continue
+      </button>
     </div>
   )
 }

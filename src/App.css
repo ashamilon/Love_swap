@@ -1144,6 +1144,25 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   border-color: rgba(255, 121, 176, 0.5);
   background: linear-gradient(135deg, rgba(255, 121, 176, 0.1), rgba(160, 102, 255, 0.06));
 }
+.ludo-event.reveal-box {
+  animation: revealPop 0.35s ease-out;
+}
+@keyframes revealPop {
+  0% { transform: scale(0.96); opacity: 0.4; }
+  60% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.ludo-event.reveal-box.is-match {
+  border-color: #7de0a6;
+  background: linear-gradient(135deg, rgba(125, 224, 166, 0.2), rgba(125, 224, 166, 0.06));
+  box-shadow: 0 14px 34px rgba(125, 224, 166, 0.2);
+}
+.ludo-event.reveal-box.is-match h2 { color: #b8f0ce; }
+.ludo-event.reveal-box.is-miss {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+}
+.ludo-event.reveal-box.is-miss h2 { color: #cfcae0; }
 .ludo-event.capture {
   border-color: rgba(255, 200, 100, 0.45);
   background: linear-gradient(135deg, rgba(255, 180, 100, 0.12), rgba(255, 80, 120, 0.06));
