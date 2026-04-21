@@ -1367,6 +1367,29 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .ludo-token.host { background: linear-gradient(135deg, #ff79b0, #ff4c84); }
 .ludo-token.guest { background: linear-gradient(135deg, #7dd3fc, #3b82f6); }
 
+.ludo-token.is-hopping {
+  animation: ludo-hop 0.18s ease-out;
+  box-shadow: 0 4px 14px rgba(255, 121, 176, 0.55);
+}
+.ludo-token.guest.is-hopping {
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.55);
+}
+@keyframes ludo-hop {
+  0% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-10px) scale(1.12); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.ludo-cell.is-landing {
+  box-shadow: 0 0 0 2px rgba(255, 121, 176, 0.75), 0 0 16px rgba(255, 121, 176, 0.5);
+  transition: box-shadow 0.12s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ludo-token.is-hopping { animation: none; }
+  .ludo-cell.is-landing { box-shadow: none; }
+}
+
 .ludo-center {
   grid-row: 2 / 7;
   grid-column: 2 / 7;

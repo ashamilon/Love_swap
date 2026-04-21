@@ -6,7 +6,7 @@ import { useLobby } from './lib/useLobby.js'
 import { useMatchmaking } from './lib/useMatchmaking.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 import { formatQuestion } from './data/questions.js'
-import { HEART_CELLS, START_CELLS, TRACK_SIZE, computeLudoAnalysis } from './lib/useRoom.js'
+import { HEART_CELLS, START_CELLS, TRACK_SIZE, WIN_DISTANCE, computeLudoAnalysis } from './lib/useRoom.js'
 import { sfx, isMuted, setMuted, primeAudio } from './lib/sounds.js'
 import {
   FloatingHearts,
@@ -1267,28 +1267,90 @@ function cellCoords(i) {
   return { row: 24 - i, col: 0 } // left: 19..23
 }
 
+// Animate displayed token positions so they step cell-by-cell toward the
+// authoritative game positions after a dice roll or heart bonus move.
+// Captures (which reset a token back to its start) snap immediately.
+function useAnimatedPositions(realPositions, stepDelay = 180) {
+  const [display, setDisplay] = useState(realPositions)
+  const displayRef = useRef(realPositions)
+  const timersRef = useRef({ host: null, guest: null })
+  const [animating, setAnimating] = useState({ host: false, guest: false })
+
+  useEffect(() => {
+    const runStep = (who) => {
+      const target = realPositions[who]
+      const current = displayRef.current[who]
+      if (current === target) {
+        setAnimating((a) => (a[who] ? { ...a, [who]: false } : a))
+        return
+      }
+      let forward = target - current
+      if (forward < 0) forward += TRACK_SIZE
+      // 0 or large jump -> capture reset or unusual; snap.
+      if (forward === 0 || forward > 9) {
+        displayRef.current = { ...displayRef.current, [who]: target }
+        setDisplay({ ...displayRef.current })
+        setAnimating((a) => ({ ...a, [who]: false }))
+        return
+      }
+      setAnimating((a) => ({ ...a, [who]: true }))
+      const next = (current + 1) % TRACK_SIZE
+      displayRef.current = { ...displayRef.current, [who]: next }
+      setDisplay({ ...displayRef.current })
+      try { sfx.tick() } catch (e) { void e }
+      if (next === target) {
+        setAnimating((a) => ({ ...a, [who]: false }))
+        return
+      }
+      timersRef.current[who] = setTimeout(() => runStep(who), stepDelay)
+    }
+
+    ;['host', 'guest'].forEach((who) => {
+      if (timersRef.current[who]) {
+        clearTimeout(timersRef.current[who])
+        timersRef.current[who] = null
+      }
+      if (realPositions[who] !== displayRef.current[who]) {
+        timersRef.current[who] = setTimeout(() => runStep(who), 60)
+      }
+    })
+  }, [realPositions.host, realPositions.guest, stepDelay])
+
+  useEffect(() => {
+    const t = timersRef.current
+    return () => {
+      if (t.host) clearTimeout(t.host)
+      if (t.guest) clearTimeout(t.guest)
+    }
+  }, [])
+
+  return { display, animating }
+}
+
 function shortName(name, fallback) {
   const n = (name || '').trim()
   if (!n) return fallback
   return n.slice(0, 3).toUpperCase()
 }
 
-function LudoBoard({ ludo, hostName, guestName }) {
+function LudoBoard({ ludo, hostName, guestName, displayPositions, movingHost, movingGuest }) {
   const hostTag = shortName(hostName, 'P1')
   const guestTag = shortName(guestName, 'P2')
+  const positions = displayPositions || ludo.positions
   const cells = []
   for (let i = 0; i < TRACK_SIZE; i += 1) {
     const { row, col } = cellCoords(i)
     const isHeart = HEART_CELLS.includes(i)
     const isHostStart = i === START_CELLS.host
     const isGuestStart = i === START_CELLS.guest
-    const hasHost = ludo.positions.host === i
-    const hasGuest = ludo.positions.guest === i
+    const hasHost = positions.host === i
+    const hasGuest = positions.guest === i
 
     const classes = ['ludo-cell']
     if (isHeart) classes.push('heart')
     if (isHostStart) classes.push('start-host')
     if (isGuestStart) classes.push('start-guest')
+    if ((hasHost && movingHost) || (hasGuest && movingGuest)) classes.push('is-landing')
 
     cells.push(
       <div
@@ -1310,8 +1372,18 @@ function LudoBoard({ ludo, hostName, guestName }) {
         {isHostStart && !isHeart && <span className="ludo-cell-mark name host-tag">{hostTag}</span>}
         {isGuestStart && !isHeart && <span className="ludo-cell-mark name guest-tag">{guestTag}</span>}
         <div className="ludo-tokens">
-          {hasHost && <div className="ludo-token host" title={hostName || 'Host'} />}
-          {hasGuest && <div className="ludo-token guest" title={guestName || 'Guest'} />}
+          {hasHost && (
+            <div
+              className={`ludo-token host ${movingHost ? 'is-hopping' : ''}`}
+              title={hostName || 'Host'}
+            />
+          )}
+          {hasGuest && (
+            <div
+              className={`ludo-token guest ${movingGuest ? 'is-hopping' : ''}`}
+              title={guestName || 'Guest'}
+            />
+          )}
         </div>
       </div>,
     )
@@ -1900,6 +1972,10 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
   const eventPhase = ludo?.event?.phase
   const eventMatched = ludo?.event?.matched
   const winner = ludo?.winner
+
+  const realPositions = ludo?.positions ?? { host: START_CELLS.host, guest: START_CELLS.guest }
+  const { display: animatedPositions, animating } = useAnimatedPositions(realPositions)
+  const isMoving = !!(animating.host || animating.guest)
   useEffect(() => {
     if (eventKind === 'heart') sfx.heart()
     else if (eventKind === 'capture') sfx.capture()
@@ -1978,15 +2054,22 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
       <div className="ludo-score-row">
         <div className="ludo-score">
           <span className="chip host" /> {hostName}
-          <strong>{ludo.distance.host}/{TRACK_SIZE}</strong>
+          <strong>{ludo.distance.host}/{WIN_DISTANCE}</strong>
         </div>
         <div className="ludo-score">
           <span className="chip guest" /> {guestName}
-          <strong>{ludo.distance.guest}/{TRACK_SIZE}</strong>
+          <strong>{ludo.distance.guest}/{WIN_DISTANCE}</strong>
         </div>
       </div>
 
-      <LudoBoard ludo={ludo} hostName={hostName} guestName={guestName} />
+      <LudoBoard
+        ludo={ludo}
+        hostName={hostName}
+        guestName={guestName}
+        displayPositions={animatedPositions}
+        movingHost={animating.host}
+        movingGuest={animating.guest}
+      />
 
       <div className="ludo-progress">
         <div className="you-block">
@@ -1994,20 +2077,20 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
           <div className="progress-bar">
             <div
               className="progress-fill me"
-              style={{ width: `${Math.min(100, (myDistance / TRACK_SIZE) * 100)}%` }}
+              style={{ width: `${Math.min(100, (myDistance / WIN_DISTANCE) * 100)}%` }}
             />
           </div>
-          <div className="dist-label">{myDistance} / {TRACK_SIZE}</div>
+          <div className="dist-label">{myDistance} / {WIN_DISTANCE}</div>
         </div>
         <div className="you-block">
           <div className="you-label">{partner?.name}</div>
           <div className="progress-bar">
             <div
               className="progress-fill them"
-              style={{ width: `${Math.min(100, (partnerDistance / TRACK_SIZE) * 100)}%` }}
+              style={{ width: `${Math.min(100, (partnerDistance / WIN_DISTANCE) * 100)}%` }}
             />
           </div>
-          <div className="dist-label">{partnerDistance} / {TRACK_SIZE}</div>
+          <div className="dist-label">{partnerDistance} / {WIN_DISTANCE}</div>
         </div>
       </div>
 
@@ -2034,7 +2117,13 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
               <p>{partner?.name} is rolling...</p>
             </div>
           )}
-          {ludo.subphase === 'event' && (
+          {ludo.subphase === 'event' && isMoving && (
+            <div className="waiting-card inline">
+              <div className="spinner small" />
+              <p>Moving...</p>
+            </div>
+          )}
+          {ludo.subphase === 'event' && !isMoving && (
             <div className="waiting-card inline">
               <p>Event on cell {ludo.positions[ludo.turn]}</p>
             </div>
@@ -2042,10 +2131,10 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
         </div>
       </div>
 
-      {ludo.subphase === 'event' && ludo.event?.kind === 'capture' && (
+      {ludo.subphase === 'event' && !isMoving && ludo.event?.kind === 'capture' && (
         <LudoCaptureEvent ludo={ludo} role={role} me={me} partner={partner} dispatch={dispatch} />
       )}
-      {ludo.subphase === 'event' && ludo.event?.kind === 'heart' && (
+      {ludo.subphase === 'event' && !isMoving && ludo.event?.kind === 'heart' && (
         <LudoHeartEvent ludo={ludo} role={role} me={me} partner={partner} dispatch={dispatch} />
       )}
 

@@ -7,7 +7,7 @@ import { reactionFor } from '../utils/reactions.js'
 export const TRACK_SIZE = 24
 export const HEART_CELLS = [2, 6, 10, 14, 18, 22]
 export const START_CELLS = { host: 0, guest: 12 }
-export const WIN_DISTANCE = TRACK_SIZE
+export const WIN_DISTANCE = 48
 
 const CAPTURE_DARES = [
   { text: "You're caught! Blow a kiss and snap a selfie of it.", kind: 'photo' },
