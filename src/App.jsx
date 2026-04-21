@@ -8,6 +8,14 @@ import { isSupabaseConfigured } from './lib/supabase.js'
 import { formatQuestion } from './data/questions.js'
 import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
 import { sfx, isMuted, setMuted, primeAudio } from './lib/sounds.js'
+import {
+  FloatingHearts,
+  CoupleSilhouette,
+  CupidArrow,
+  HeartBurst,
+  SparkleConfetti,
+  BeatingHeart,
+} from './components/Illustrations.jsx'
 
 async function compressImage(file, maxDim = 480, quality = 0.65) {
   const dataUrl = await new Promise((resolve, reject) => {
@@ -446,8 +454,10 @@ function MenuScreen({
   }
 
   return (
-    <section className="panel">
-      <header className="panel-header">
+    <section className="panel has-illus">
+      <FloatingHearts count={10} seed={1} />
+      <header className="panel-header with-illus">
+        <CoupleSilhouette size={110} />
         <h1>Love Swap</h1>
         <p className="tagline">Play private with your partner, or meet someone new.</p>
       </header>
@@ -595,7 +605,7 @@ function MenuScreen({
             </button>
           ) : (
             <div className="matchmaking-status">
-              <div className="spinner" />
+              <CupidArrow size={90} />
               <div>
                 <strong>
                   {matchStatus === 'searching' && 'Looking for someone...'}
@@ -646,8 +656,10 @@ function WaitingForPartnerScreen({ roomCode, onLeave, partnerOnline, visibility 
   const isStranger = visibility === 'stranger'
 
   return (
-    <section className="panel">
-      <header className="panel-header">
+    <section className="panel has-illus">
+      <FloatingHearts count={8} seed={3} />
+      <header className="panel-header with-illus">
+        {isStranger ? <CupidArrow size={90} /> : <BeatingHeart size={40} />}
         <h1>{isStranger ? 'Finding a stranger...' : 'Share your code'}</h1>
         <p className="tagline">
           {isStranger
@@ -1192,9 +1204,13 @@ function FinalScreen({ state, role, dispatch, me, partner, onLeave }) {
   else if (myScore < partnerScore) verdict = `${partner?.name} out-read you this time`
   else verdict = "A perfect tie"
 
+  const iWonFinal = myScore > partnerScore
   return (
-    <section className="panel final-panel">
-      <h1 className="final-title">{verdict}</h1>
+    <section className="panel final-panel has-illus">
+      {iWonFinal && <SparkleConfetti count={24} />}
+      <h1 className="final-title">
+        {iWonFinal && <BeatingHeart size={32} />} {verdict}
+      </h1>
       <p className="tagline">Couple accuracy: {combinedAccuracy}%</p>
 
       <div className="scoreboard-grid big">
@@ -1590,6 +1606,7 @@ function LudoHeartChoiceEvent({ event, role, me, partner, dispatch }) {
   // reveal phase (choice)
   return (
     <div className={`ludo-event heart reveal-box ${event.matched ? 'is-match' : 'is-miss'}`}>
+      <HeartBurst size={120} matched={event.matched} />
       <h2>{event.matched ? '♥ Matched!' : '♥ Not quite'}</h2>
       <h3 className="question">{questionText}</h3>
       <ChoiceRevealGrid
@@ -1722,6 +1739,7 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
   // reveal phase (open)
   return (
     <div className={`ludo-event heart reveal-box ${event.matched ? 'is-match' : 'is-miss'}`}>
+      <HeartBurst size={120} matched={event.matched} />
       <h2>{event.matched ? '♥ Matched!' : '♥ Not quite'}</h2>
       <h3 className="question">{questionText}</h3>
       {event.matched ? (
@@ -1794,8 +1812,11 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
   if (ludo.subphase === 'done' && ludo.winner) {
     const iWon = ludo.winner === role
     return (
-      <section className="panel">
-        <h1 className="final-title">{iWon ? 'You won!' : `${partner?.name} won the race!`}</h1>
+      <section className="panel has-illus">
+        {iWon && <SparkleConfetti count={24} />}
+        <h1 className="final-title">
+          {iWon && <BeatingHeart size={32} />} {iWon ? 'You won!' : `${partner?.name} won the race!`}
+        </h1>
         <p className="subtle center">
           {iWon
             ? 'First to lap the heart track. You read each other perfectly.'

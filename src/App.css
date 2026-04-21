@@ -50,6 +50,27 @@
   margin-bottom: 18px;
 }
 
+/* Panels with background illustrations (floating hearts, confetti) */
+.panel.has-illus { overflow: hidden; }
+.panel.has-illus > * { position: relative; z-index: 1; }
+.panel.has-illus > .floating-hearts,
+.panel.has-illus > .sparkle-confetti {
+  z-index: 0;
+}
+
+.panel-header.with-illus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.panel-header.with-illus h1 { margin: 4px 0 2px; }
+
+.final-title .beating-heart {
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
 h1 {
   margin: 0 0 6px;
   font-size: clamp(1.7rem, 3vw, 2.2rem);

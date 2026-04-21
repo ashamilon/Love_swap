@@ -1,0 +1,185 @@
+/* ==== Floating hearts background ==== */
+.floating-hearts {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.floating-hearts .fh {
+  position: absolute;
+  bottom: -40px;
+  animation: floatUp linear infinite;
+  filter: drop-shadow(0 0 10px rgba(255, 121, 176, 0.5));
+}
+.floating-hearts .fh-pink { color: #ff79b0; }
+.floating-hearts .fh-purple { color: #a066ff; }
+@keyframes floatUp {
+  0% { transform: translateY(0) translateX(0) rotate(-8deg); }
+  30% { transform: translateY(-30vh) translateX(10px) rotate(6deg); }
+  60% { transform: translateY(-60vh) translateX(-10px) rotate(-4deg); }
+  100% { transform: translateY(-110vh) translateX(6px) rotate(8deg); opacity: 0; }
+}
+
+/* ==== Couple silhouette ==== */
+.couple-svg {
+  display: block;
+  margin: 0 auto 8px;
+  filter: drop-shadow(0 6px 14px rgba(255, 121, 176, 0.35));
+}
+.couple-svg .couple-left { animation: lean-left 4s ease-in-out infinite; transform-origin: 72px 100px; }
+.couple-svg .couple-right { animation: lean-right 4s ease-in-out infinite; transform-origin: 128px 100px; }
+.couple-svg .couple-heart { animation: couple-heart 2s ease-in-out infinite; transform-origin: 100px 32px; }
+@keyframes lean-left {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes lean-right {
+  0%, 100% { transform: rotate(3deg); }
+  50% { transform: rotate(-4deg); }
+}
+@keyframes couple-heart {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.12); }
+}
+
+/* ==== Cupid arrow ==== */
+.cupid-svg {
+  display: block;
+  margin: 0 auto;
+}
+.cupid-svg .cupid-shaft {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: cupid-fly 2.2s ease-in-out infinite;
+}
+.cupid-svg .cupid-head { animation: cupid-head 2.2s ease-in-out infinite; transform-origin: 100px 30px; }
+.cupid-svg .cupid-feather { animation: cupid-feather 2.2s ease-in-out infinite; transform-origin: 12px 30px; }
+@keyframes cupid-fly {
+  0% { stroke-dashoffset: 100; opacity: 0.4; }
+  40% { stroke-dashoffset: 0; opacity: 1; }
+  80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: -100; opacity: 0; }
+}
+@keyframes cupid-head {
+  0% { transform: translateX(-30px) scale(0.9); opacity: 0.4; }
+  40% { transform: translateX(0) scale(1); opacity: 1; }
+  80% { transform: translateX(0) scale(1.05); opacity: 1; }
+  100% { transform: translateX(12px) scale(1); opacity: 0; }
+}
+@keyframes cupid-feather {
+  0%, 40% { transform: translateX(-30px); opacity: 0.4; }
+  80% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-10px); opacity: 0; }
+}
+
+/* ==== Heart burst ==== */
+.heart-burst {
+  display: block;
+  margin: 0 auto;
+}
+.heart-burst .hb-main {
+  transform-origin: 80px 82px;
+  animation: hb-pop 1.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.heart-burst.is-miss .hb-main { filter: grayscale(0.5) brightness(0.75); animation: hb-shake 0.8s ease-in-out; }
+.heart-burst .hb-rays { animation: hb-rays 1.2s ease-out; transform-origin: 80px 80px; }
+.heart-burst .hb-sparkles { animation: hb-sparkle 1.4s ease-out infinite; }
+@keyframes hb-pop {
+  0% { transform: scale(0.2); opacity: 0; }
+  50% { transform: scale(1.25); opacity: 1; }
+  70% { transform: scale(0.92); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes hb-shake {
+  0%, 100% { transform: translateX(0) scale(1); }
+  20% { transform: translateX(-6px) scale(0.97); }
+  40% { transform: translateX(6px) scale(0.97); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes hb-rays {
+  0% { transform: scale(0.6) rotate(0deg); opacity: 0; }
+  60% { transform: scale(1.15) rotate(15deg); opacity: 0.95; }
+  100% { transform: scale(1) rotate(0deg); opacity: 0; }
+}
+@keyframes hb-sparkle {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+/* ==== Sparkle confetti ==== */
+.sparkle-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  border-radius: 2px;
+  animation: confetti-fall linear infinite;
+}
+.confetti-piece.kind-0 {
+  background: linear-gradient(135deg, #ff79b0, #ff3d7a);
+  border-radius: 50%;
+}
+.confetti-piece.kind-1 {
+  background: linear-gradient(135deg, #a066ff, #6a2ad1);
+  transform: rotate(45deg);
+}
+.confetti-piece.kind-2 {
+  background: linear-gradient(135deg, #ffd4e8, #ff79b0);
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* ==== Kiss mark ==== */
+.kiss-mark {
+  display: inline-block;
+  animation: kiss-pop 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 2px 6px rgba(255, 90, 138, 0.5));
+}
+@keyframes kiss-pop {
+  0%, 100% { transform: scale(1) rotate(-4deg); }
+  20% { transform: scale(1.15) rotate(-2deg); }
+  40% { transform: scale(0.95) rotate(4deg); }
+  60% { transform: scale(1.05) rotate(-3deg); }
+}
+
+/* ==== Beating heart ==== */
+.beating-heart {
+  display: inline-block;
+  animation: heartBeat 1.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(255, 61, 122, 0.7));
+}
+@keyframes heartBeat {
+  0%, 100% { transform: scale(1); }
+  20% { transform: scale(1.2); }
+  40% { transform: scale(0.95); }
+  60% { transform: scale(1.1); }
+  80% { transform: scale(0.98); }
+}
+
+/* Respect user reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .floating-hearts .fh,
+  .couple-svg .couple-left,
+  .couple-svg .couple-right,
+  .couple-svg .couple-heart,
+  .cupid-svg .cupid-shaft,
+  .cupid-svg .cupid-head,
+  .cupid-svg .cupid-feather,
+  .heart-burst .hb-main,
+  .heart-burst .hb-rays,
+  .heart-burst .hb-sparkles,
+  .confetti-piece,
+  .kiss-mark,
+  .beating-heart {
+    animation: none !important;
+  }
+}
