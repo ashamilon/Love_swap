@@ -6,8 +6,10 @@
 //
 // Question text uses placeholders so the SAME question reads correctly
 // for both players:
-//   {name}  -> "you" (answerer's view) / answerer's name (guesser's view)
-//   {their} -> "your" (answerer's view) / "<name>'s" (guesser's view)
+//   {name}    -> "you"  (answerer's view) / answerer's name (guesser's view)
+//   {their}   -> "your" (answerer's view) / "<name>'s"     (guesser's view)
+//   {partner} -> partner's name (answerer's view) / "you"  (guesser's view)
+//   {partners}-> "<partner>'s"  (answerer's view) / "your" (guesser's view)
 
 export const CATEGORIES = ['preferences', 'memories', 'scenarios', 'whatWouldThey']
 
@@ -140,34 +142,34 @@ export const QUESTIONS = {
   whatWouldThey: [
     { type: 'open', spice: 1, text: "What would {name} order at a new cafe?" },
     { type: 'open', spice: 2, text: "What would {name} do on a totally free day?" },
-    { type: 'open', spice: 3, text: "How would {name} flirt with you in public without saying a word?" },
-    { type: 'open', spice: 4, text: "What would {name} whisper to drive you crazy?" },
-    { type: 'open', spice: 5, text: "What move would {name} pull when trying to seduce you?" },
+    { type: 'open', spice: 3, text: "How would {name} flirt with {partner} in public without saying a word?" },
+    { type: 'open', spice: 4, text: "What would {name} whisper to drive {partner} crazy?" },
+    { type: 'open', spice: 5, text: "What move would {name} pull when trying to seduce {partner}?" },
 
     {
       type: 'choice', spice: 1,
-      text: "What would {name} do if you were 10 minutes late?",
-      options: ['Text "everything okay?"', 'Wait patiently', 'Call immediately', 'Tease you for it later'],
+      text: "What would {name} do if {partner} showed up 10 minutes late?",
+      options: ['Text "everything okay?"', 'Wait patiently', 'Call immediately', 'Tease them for it later'],
     },
     {
       type: 'choice', spice: 2,
-      text: "How would {name} react if you cooked dinner out of nowhere?",
-      options: ['Get emotional', 'Joke and then hug you', 'Eat it silently and happy', 'Post it everywhere'],
+      text: "How would {name} react if {partner} cooked dinner out of nowhere?",
+      options: ['Get emotional', 'Joke and then hug them', 'Eat it silently and happy', 'Post it everywhere'],
     },
     {
       type: 'choice', spice: 2,
       text: "What does {name} do first when stressed?",
-      options: ['Vent it out', 'Go quiet', 'Distract themselves', 'Come to you for comfort'],
+      options: ['Vent it out', 'Go quiet', 'Distract themselves', 'Come to {partner} for comfort'],
     },
     {
       type: 'choice', spice: 3,
-      text: "What would {name} do if you wore something extra hot?",
-      options: ['Compliment out loud', 'Stare and go quiet', 'Pull you closer', 'Tease you the whole night'],
+      text: "What would {name} do if {partner} wore something extra hot?",
+      options: ['Compliment out loud', 'Stare and go quiet', 'Pull them closer', 'Tease them the whole night'],
     },
     {
       type: 'choice', spice: 4,
       text: "How does {name} flirt when nobody is watching?",
-      options: ['Whispers in your ear', 'A slow touch on the back', 'A long deep look', 'A cheeky smile'],
+      options: ["Whispers in {partners} ear", 'A slow touch on the back', 'A long deep look', 'A cheeky smile'],
     },
     {
       type: 'choice', spice: 5,
@@ -186,16 +188,29 @@ export const MODES = {
 // Render a question's text from a specific viewer's perspective.
 // viewerIsResponder = true  -> the reader is the one answering about themselves
 // viewerIsResponder = false -> the reader is guessing what their partner said
-export function formatQuestion(text, { viewerIsResponder, responderName }) {
+export function formatQuestion(text, { viewerIsResponder, responderName, partnerName }) {
   if (!text) return ''
-  const safeName = responderName && responderName.trim() ? responderName.trim() : 'your partner'
-  const who = viewerIsResponder ? 'you' : safeName
-  const whose = viewerIsResponder
+  const safeResp = responderName && responderName.trim() ? responderName.trim() : 'your partner'
+  const safePart = partnerName && partnerName.trim() ? partnerName.trim() : 'your partner'
+
+  const name = viewerIsResponder ? 'you' : safeResp
+  const their = viewerIsResponder
     ? 'your'
-    : safeName === 'your partner'
+    : safeResp === 'your partner'
       ? "your partner's"
-      : `${safeName}'s`
-  return text.replace(/\{name\}/g, who).replace(/\{their\}/g, whose)
+      : `${safeResp}'s`
+  const partner = viewerIsResponder ? safePart : 'you'
+  const partners = viewerIsResponder
+    ? safePart === 'your partner'
+      ? "your partner's"
+      : `${safePart}'s`
+    : 'your'
+
+  return text
+    .replace(/\{partners\}/g, partners)
+    .replace(/\{partner\}/g, partner)
+    .replace(/\{their\}/g, their)
+    .replace(/\{name\}/g, name)
 }
 
 // Returns a shuffled list of questions matching mode + spice ceiling.

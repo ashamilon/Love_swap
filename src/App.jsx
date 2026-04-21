@@ -440,7 +440,7 @@ function TurnHeader({ state, me, partner, role }) {
   )
 }
 
-function OptionPicker({ options, value, onChange }) {
+function OptionPicker({ options, value, onChange, formatLabel }) {
   return (
     <div className="option-grid">
       {options.map((opt) => (
@@ -453,7 +453,7 @@ function OptionPicker({ options, value, onChange }) {
             onChange(opt)
           }}
         >
-          {opt}
+          {formatLabel ? formatLabel(opt) : opt}
         </button>
       ))}
     </div>
@@ -468,10 +468,10 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
   const [hidden, setHidden] = useState(true)
 
   const responderName = iAmResponder ? me?.name : partner?.name
-  const questionText = formatQuestion(turn.question.text, {
-    viewerIsResponder: iAmResponder,
-    responderName,
-  })
+  const partnerName = iAmResponder ? partner?.name : me?.name
+  const fmt = (t) =>
+    formatQuestion(t, { viewerIsResponder: iAmResponder, responderName, partnerName })
+  const questionText = fmt(turn.question.text)
 
   if (!iAmResponder) {
     return (
@@ -512,6 +512,7 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
             options={turn.question.options}
             value={text}
             onChange={setText}
+            formatLabel={fmt}
           />
           <button type="submit" className="cta" disabled={!text}>
             Lock answer
@@ -552,10 +553,10 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
   const [text, setText] = useState('')
 
   const responderName = iAmGuesser ? partner?.name : me?.name
-  const questionText = formatQuestion(turn.question.text, {
-    viewerIsResponder: !iAmGuesser,
-    responderName,
-  })
+  const partnerName = iAmGuesser ? me?.name : partner?.name
+  const fmt = (t) =>
+    formatQuestion(t, { viewerIsResponder: !iAmGuesser, responderName, partnerName })
+  const questionText = fmt(turn.question.text)
 
   if (!iAmGuesser) {
     return (
@@ -596,6 +597,7 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
             options={turn.question.options}
             value={text}
             onChange={setText}
+            formatLabel={fmt}
           />
           <button type="submit" className="cta" disabled={!text}>
             Lock guess and reveal
@@ -623,7 +625,7 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
   )
 }
 
-function ChoiceRevealGrid({ options, answer, guess, responderName, guesserName }) {
+function ChoiceRevealGrid({ options, answer, guess, responderName, guesserName, formatLabel }) {
   return (
     <div className="choice-reveal">
       {options.map((opt) => {
@@ -635,7 +637,7 @@ function ChoiceRevealGrid({ options, answer, guess, responderName, guesserName }
         if (isAnswer && isGuess) classes.push('is-match')
         return (
           <div key={opt} className={classes.join(' ')}>
-            <span className="choice-text">{opt}</span>
+            <span className="choice-text">{formatLabel ? formatLabel(opt) : opt}</span>
             <span className="choice-tags">
               {isAnswer && <span className="choice-tag tag-answer">{responderName}</span>}
               {isGuess && <span className="choice-tag tag-guess">{guesserName}</span>}
@@ -671,10 +673,10 @@ function RevealScreen({ state, role, dispatch, me, partner }) {
   const guesserName = turn.responder === 'host' ? state.players.guest?.name : state.players.host?.name
   const isExactMatch = state.answerText === state.guessText
   const viewerIsResponder = turn.responder === role
-  const questionText = formatQuestion(turn.question.text, {
-    viewerIsResponder,
-    responderName,
-  })
+  const partnerName = viewerIsResponder ? guesserName : responderName
+  const fmt = (t) =>
+    formatQuestion(t, { viewerIsResponder, responderName, partnerName })
+  const questionText = fmt(turn.question.text)
 
   return (
     <section className="panel">
@@ -688,6 +690,7 @@ function RevealScreen({ state, role, dispatch, me, partner }) {
           guess={state.guessText}
           responderName={responderName}
           guesserName={guesserName}
+          formatLabel={fmt}
         />
       ) : (
         <div className="reveal-grid">
@@ -1098,10 +1101,10 @@ function LudoHeartChoiceEvent({ event, role, me, partner, dispatch }) {
   const iGuess = !iLanded
   const responderName = iLanded ? me?.name : partner?.name
   const guesserName = iLanded ? partner?.name : me?.name
-  const questionText = formatQuestion(event.question.text, {
-    viewerIsResponder: iLanded,
-    responderName,
-  })
+  const partnerName = iLanded ? partner?.name : me?.name
+  const fmt = (t) =>
+    formatQuestion(t, { viewerIsResponder: iLanded, responderName, partnerName })
+  const questionText = fmt(event.question.text)
   const [pick, setPick] = useState('')
 
   useEffect(() => {
@@ -1117,7 +1120,7 @@ function LudoHeartChoiceEvent({ event, role, me, partner, dispatch }) {
         {iLanded ? (
           <>
             <p className="subtle">Pick your honest answer. {partner?.name} will try to guess which one.</p>
-            <OptionPicker options={event.question.options} value={pick} onChange={setPick} />
+            <OptionPicker options={event.question.options} value={pick} onChange={setPick} formatLabel={fmt} />
             <button
               className="cta"
               disabled={!pick}
@@ -1148,7 +1151,7 @@ function LudoHeartChoiceEvent({ event, role, me, partner, dispatch }) {
         {iGuess ? (
           <>
             <p className="subtle">{partner?.name} picked one. Which do you think they chose?</p>
-            <OptionPicker options={event.question.options} value={pick} onChange={setPick} />
+            <OptionPicker options={event.question.options} value={pick} onChange={setPick} formatLabel={fmt} />
             <button
               className="cta"
               disabled={!pick}
@@ -1181,6 +1184,7 @@ function LudoHeartChoiceEvent({ event, role, me, partner, dispatch }) {
         guess={event.guess}
         responderName={responderName}
         guesserName={guesserName}
+        formatLabel={fmt}
       />
       {event.matched ? (
         <p className="match-badge">Exact match - {responderName} gets +3 move and an extra roll</p>
@@ -1220,9 +1224,11 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
 
   const iLanded = event.landed === role
   const responderName = iLanded ? me?.name : partner?.name
+  const partnerName = iLanded ? partner?.name : me?.name
   const questionText = formatQuestion(event.question.text, {
     viewerIsResponder: iLanded,
     responderName,
+    partnerName,
   })
 
   if (event.phase === 'prompt') {
@@ -1300,7 +1306,6 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
   }
 
   // reveal phase (open)
-  const partnerName = iLanded ? partner?.name : me?.name
   return (
     <div className={`ludo-event heart reveal-box ${event.matched ? 'is-match' : 'is-miss'}`}>
       <h2>{event.matched ? '♥ Matched!' : '♥ Not quite'}</h2>
