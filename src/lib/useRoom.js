@@ -11,13 +11,13 @@ export const WIN_DISTANCE = TRACK_SIZE
 
 const CAPTURE_DARES = [
   { text: "You're caught! Blow a kiss and snap a selfie of it.", kind: 'photo' },
-  { text: "Gotcha! Say one thing you love about them out loud.", kind: 'voice' },
   { text: "Captured! Bite your lip and send a cute selfie.", kind: 'photo' },
-  { text: "Busted! Whisper their name like you mean it.", kind: 'voice' },
-  { text: "Caught red-handed! Promise one sweet thing for later, out loud.", kind: 'voice' },
   { text: "Caught! Flash a heart sign with your hands in a selfie.", kind: 'photo' },
   { text: "Busted! Send a pouty selfie to show who's boss.", kind: 'photo' },
-  { text: "Gotcha! Give them a compliment in your most flirty voice.", kind: 'voice' },
+  { text: "Gotcha! Wink at the camera and send a sultry selfie.", kind: 'photo' },
+  { text: "Caught red-handed! Strike your most confident pose for a selfie.", kind: 'photo' },
+  { text: "Busted! Send a selfie with your hand on your heart.", kind: 'photo' },
+  { text: "Gotcha! Make your cutest puppy eyes and send a selfie.", kind: 'photo' },
 ]
 
 function randomDare() {
