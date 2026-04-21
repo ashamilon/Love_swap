@@ -4,6 +4,7 @@ import { useRoom } from './lib/useRoom.js'
 import { useVoice } from './lib/useVoice.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 import { formatQuestion } from './data/questions.js'
+import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
 
 function VoiceControls({ voice, partnerName }) {
   const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
@@ -259,7 +260,31 @@ function LobbyScreen({ role, state, dispatch, me, partner, roomCode, onLeave }) 
       </header>
 
       <div className="couple-block">
-        <h3>Game settings</h3>
+        <h3>Choose your game</h3>
+        <div className="game-type-grid">
+          <button
+            type="button"
+            className={`game-type-card ${state.gameType === 'questions' ? 'selected' : ''}`}
+            onClick={() => isHost && dispatch({ type: 'SET_GAME_TYPE', gameType: 'questions' })}
+            disabled={!isHost}
+          >
+            <div className="gt-icon">{'♥'}</div>
+            <div className="gt-title">Know Me Quiz</div>
+            <div className="gt-desc">Answer and guess what your partner said.</div>
+          </button>
+          <button
+            type="button"
+            className={`game-type-card ${state.gameType === 'ludo' ? 'selected' : ''}`}
+            onClick={() => isHost && dispatch({ type: 'SET_GAME_TYPE', gameType: 'ludo' })}
+            disabled={!isHost}
+          >
+            <div className="gt-icon">{'◆'}</div>
+            <div className="gt-title">Love Ludo</div>
+            <div className="gt-desc">Race around the heart loop with flirty prompts.</div>
+          </button>
+        </div>
+
+        <h3>Settings</h3>
         <div className="two-col">
           <label>
             Mode
@@ -273,19 +298,21 @@ function LobbyScreen({ role, state, dispatch, me, partner, roomCode, onLeave }) 
               <option value="flirty">Flirty</option>
             </select>
           </label>
-          <label>
-            Rounds
-            <select
-              value={config.rounds}
-              onChange={(e) => update({ rounds: Number(e.target.value) })}
-              disabled={!isHost}
-            >
-              <option value={3}>3 (quick)</option>
-              <option value={5}>5 (classic)</option>
-              <option value={7}>7</option>
-              <option value={10}>10 (marathon)</option>
-            </select>
-          </label>
+          {state.gameType === 'questions' && (
+            <label>
+              Rounds
+              <select
+                value={config.rounds}
+                onChange={(e) => update({ rounds: Number(e.target.value) })}
+                disabled={!isHost}
+              >
+                <option value={3}>3 (quick)</option>
+                <option value={5}>5 (classic)</option>
+                <option value={7}>7</option>
+                <option value={10}>10 (marathon)</option>
+              </select>
+            </label>
+          )}
         </div>
 
         <label className="slider-label">
@@ -301,20 +328,27 @@ function LobbyScreen({ role, state, dispatch, me, partner, roomCode, onLeave }) 
           <small className="subtle">1 = tame, 5 = spicy.</small>
         </label>
 
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={config.doublePoints}
-            onChange={(e) => update({ doublePoints: e.target.checked })}
-            disabled={!isHost}
-          />
-          Random double-points round
-        </label>
+        {state.gameType === 'questions' && (
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={config.doublePoints}
+              onChange={(e) => update({ doublePoints: e.target.checked })}
+              disabled={!isHost}
+            />
+            Random double-points round
+          </label>
+        )}
+        {state.gameType === 'ludo' && (
+          <p className="subtle">
+            First to complete a full lap wins. Landing on a heart cell gives a flirty prompt; nail it together for bonus moves. Catch your partner to send them home.
+          </p>
+        )}
       </div>
 
       {isHost ? (
         <button className="cta" onClick={() => dispatch({ type: 'START_GAME' })}>
-          Start game
+          {state.gameType === 'ludo' ? 'Start Love Ludo' : 'Start game'}
         </button>
       ) : (
         <p className="subtle center">{partner?.name} is setting things up...</p>
@@ -719,6 +753,320 @@ function FinalScreen({ state, role, dispatch, me, partner, onLeave }) {
   )
 }
 
+// ---------- LOVE LUDO ----------
+
+// 7x7 grid perimeter traversal mapping cellIndex -> (row, col)
+function cellCoords(i) {
+  if (i <= 6) return { row: 0, col: i } // top: 0..6
+  if (i <= 11) return { row: i - 6, col: 6 } // right: 7..11
+  if (i <= 18) return { row: 6, col: 18 - i } // bottom: 12..18
+  return { row: 24 - i, col: 0 } // left: 19..23
+}
+
+function LudoBoard({ ludo, hostName, guestName }) {
+  const cells = []
+  for (let i = 0; i < TRACK_SIZE; i += 1) {
+    const { row, col } = cellCoords(i)
+    const isHeart = HEART_CELLS.includes(i)
+    const isHostStart = i === START_CELLS.host
+    const isGuestStart = i === START_CELLS.guest
+    const hasHost = ludo.positions.host === i
+    const hasGuest = ludo.positions.guest === i
+
+    const classes = ['ludo-cell']
+    if (isHeart) classes.push('heart')
+    if (isHostStart) classes.push('start-host')
+    if (isGuestStart) classes.push('start-guest')
+
+    cells.push(
+      <div
+        key={i}
+        className={classes.join(' ')}
+        style={{ gridRow: row + 1, gridColumn: col + 1 }}
+        title={
+          isHeart
+            ? 'Heart cell (flirty prompt)'
+            : isHostStart
+              ? `${hostName || 'Host'} start`
+              : isGuestStart
+                ? `${guestName || 'Guest'} start`
+                : `Cell ${i}`
+        }
+      >
+        <span className="ludo-cell-num">{i}</span>
+        {isHeart && <span className="ludo-cell-mark">♥</span>}
+        {isHostStart && !isHeart && <span className="ludo-cell-mark">H</span>}
+        {isGuestStart && !isHeart && <span className="ludo-cell-mark">G</span>}
+        <div className="ludo-tokens">
+          {hasHost && <div className="ludo-token host" title={hostName || 'Host'} />}
+          {hasGuest && <div className="ludo-token guest" title={guestName || 'Guest'} />}
+        </div>
+      </div>,
+    )
+  }
+
+  return (
+    <div className="ludo-board-wrap">
+      <div className="ludo-board">
+        {cells}
+        <div className="ludo-center">
+          <div className="ludo-center-heart">♥</div>
+          <div className="ludo-legend">
+            <div className="legend-row"><span className="chip host" /> {hostName || 'Host'}</div>
+            <div className="legend-row"><span className="chip guest" /> {guestName || 'Guest'}</div>
+            <div className="legend-row muted">♥ heart prompt</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Dice({ value, rolling }) {
+  const faces = ['.', '..', '...', '::', ':::', '::::']
+  return (
+    <div className={`dice-box ${rolling ? 'rolling' : ''}`}>
+      <div className="dice">
+        <span className="dice-face">{value ? faces[value - 1] : '?'}</span>
+      </div>
+    </div>
+  )
+}
+
+function LudoCaptureEvent({ ludo, role, me, partner, dispatch }) {
+  const event = ludo.event
+  const youWereCaptured = event.captured === role
+  const youDidCapture = event.by === role
+  const iAcked = Boolean(event.acked?.[role])
+
+  return (
+    <div className="ludo-event capture">
+      <h2>{youDidCapture ? 'Gotcha!' : youWereCaptured ? 'You got caught' : ''}</h2>
+      {youDidCapture && (
+        <p>You landed on {partner?.name}. They head back to start and you get an extra roll.</p>
+      )}
+      {youWereCaptured && (
+        <>
+          <p>{partner?.name} caught your token. Your dare:</p>
+          <p className="dare-text">{event.dare}</p>
+        </>
+      )}
+      <button
+        className="cta"
+        onClick={() => dispatch({ type: 'LUDO_ACK_CAPTURE', who: role })}
+        disabled={iAcked}
+      >
+        {iAcked ? `Waiting for ${partner?.name}...` : 'Continue'}
+      </button>
+      <p className="subtle center">
+        {me?.name} ready: {event.acked?.[role] ? 'yes' : 'no'}
+        {' | '}
+        {partner?.name} ready: {event.acked?.[role === 'host' ? 'guest' : 'host'] ? 'yes' : 'no'}
+      </p>
+    </div>
+  )
+}
+
+function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
+  const event = ludo.event
+  const iLanded = event.landed === role
+  const responderName = iLanded ? me?.name : partner?.name
+  const questionText = formatQuestion(event.question.text, {
+    viewerIsResponder: iLanded,
+    responderName,
+  })
+  const isChoice = event.question.type === 'choice'
+
+  if (event.phase === 'prompt') {
+    return (
+      <div className="ludo-event heart">
+        <h2>♥ Heart cell</h2>
+        <div className="category-chip">{event.question.category}</div>
+        <h3 className="question">{questionText}</h3>
+        {isChoice && (
+          <div className="option-grid static">
+            {event.question.options.map((opt) => (
+              <div key={opt} className="option-btn static">{opt}</div>
+            ))}
+          </div>
+        )}
+        <p className="subtle">
+          {iLanded
+            ? `Say your answer out loud to ${partner?.name} (use voice chat above). When done, they decide if they matched your vibe.`
+            : `${partner?.name} will say their answer aloud. Listen on voice, then judge if you matched.`}
+        </p>
+        {iLanded ? (
+          <button
+            className="cta"
+            onClick={() => dispatch({ type: 'LUDO_HEART_BEGIN_JUDGING' })}
+          >
+            I said it — let {partner?.name} judge
+          </button>
+        ) : (
+          <p className="subtle center">Waiting for {partner?.name} to answer out loud...</p>
+        )}
+      </div>
+    )
+  }
+
+  // judging phase
+  const iJudge = !iLanded
+  return (
+    <div className="ludo-event heart">
+      <h2>♥ Did you match?</h2>
+      <h3 className="question">{questionText}</h3>
+      {iJudge ? (
+        <>
+          <p className="subtle">Did {partner?.name}'s answer match how you'd describe it?</p>
+          <div className="judge-row">
+            <button
+              className="cta match"
+              onClick={() => dispatch({ type: 'LUDO_HEART_JUDGE', matched: true })}
+            >
+              Perfect match (+3 move)
+            </button>
+            <button
+              className="ghost"
+              onClick={() => dispatch({ type: 'LUDO_HEART_JUDGE', matched: false })}
+            >
+              Close but no
+            </button>
+          </div>
+        </>
+      ) : (
+        <p className="subtle center">Waiting for {partner?.name} to judge...</p>
+      )}
+    </div>
+  )
+}
+
+function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
+  const ludo = state.ludo
+  if (!ludo) return null
+
+  const myTurn = ludo.turn === role
+  const hostName = state.players.host?.name
+  const guestName = state.players.guest?.name
+  const myDistance = ludo.distance[role]
+  const partnerDistance = ludo.distance[role === 'host' ? 'guest' : 'host']
+
+  if (ludo.subphase === 'done' && ludo.winner) {
+    const iWon = ludo.winner === role
+    return (
+      <section className="panel">
+        <h1 className="final-title">{iWon ? 'You won!' : `${partner?.name} won the race!`}</h1>
+        <p className="subtle center">
+          {iWon
+            ? 'First to lap the heart track. You read each other perfectly.'
+            : `${partner?.name} lapped the board first. Rematch?`}
+        </p>
+        <LudoBoard ludo={ludo} hostName={hostName} guestName={guestName} />
+        <div className="final-actions">
+          {role === 'host' && (
+            <button className="cta" onClick={() => dispatch({ type: 'LUDO_RESTART' })}>
+              Rematch
+            </button>
+          )}
+          {role === 'host' && (
+            <button className="ghost" onClick={() => dispatch({ type: 'LUDO_BACK_TO_LOBBY' })}>
+              Back to lobby
+            </button>
+          )}
+          {role !== 'host' && (
+            <p className="subtle center">
+              Waiting for {partner?.name} to pick what's next...
+            </p>
+          )}
+          <button className="ghost" onClick={onLeave}>Leave room</button>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="panel ludo-panel">
+      <header className="panel-header tight">
+        <h1>Love Ludo</h1>
+        <p className="tagline">
+          Round the heart loop with {partner?.name}
+        </p>
+      </header>
+
+      <div className="ludo-score-row">
+        <div className="ludo-score">
+          <span className="chip host" /> {hostName}
+          <strong>{ludo.distance.host}/{TRACK_SIZE}</strong>
+        </div>
+        <div className="ludo-score">
+          <span className="chip guest" /> {guestName}
+          <strong>{ludo.distance.guest}/{TRACK_SIZE}</strong>
+        </div>
+      </div>
+
+      <LudoBoard ludo={ludo} hostName={hostName} guestName={guestName} />
+
+      <div className="ludo-progress">
+        <div className="you-block">
+          <div className="you-label">You</div>
+          <div className="progress-bar">
+            <div
+              className="progress-fill me"
+              style={{ width: `${Math.min(100, (myDistance / TRACK_SIZE) * 100)}%` }}
+            />
+          </div>
+          <div className="dist-label">{myDistance} / {TRACK_SIZE}</div>
+        </div>
+        <div className="you-block">
+          <div className="you-label">{partner?.name}</div>
+          <div className="progress-bar">
+            <div
+              className="progress-fill them"
+              style={{ width: `${Math.min(100, (partnerDistance / TRACK_SIZE) * 100)}%` }}
+            />
+          </div>
+          <div className="dist-label">{partnerDistance} / {TRACK_SIZE}</div>
+        </div>
+      </div>
+
+      {ludo.subphase === 'rolling' && (
+        <div className="ludo-roll-row">
+          <Dice value={ludo.dice} />
+          {myTurn ? (
+            <button
+              className="cta"
+              onClick={() => dispatch({ type: 'LUDO_ROLL', who: role })}
+            >
+              Roll the dice
+            </button>
+          ) : (
+            <div className="waiting-card inline">
+              <div className="spinner small" />
+              <p>{partner?.name} is rolling...</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {ludo.subphase === 'event' && ludo.event?.kind === 'capture' && (
+        <LudoCaptureEvent ludo={ludo} role={role} me={me} partner={partner} dispatch={dispatch} />
+      )}
+      {ludo.subphase === 'event' && ludo.event?.kind === 'heart' && (
+        <LudoHeartEvent ludo={ludo} role={role} me={me} partner={partner} dispatch={dispatch} />
+      )}
+
+      {ludo.log?.length > 0 && (
+        <ul className="ludo-log">
+          {ludo.log.slice(0, 3).map((entry, i) => (
+            <li key={`${entry.t}-${i}`}>{entry.text}</li>
+          ))}
+        </ul>
+      )}
+
+      <button className="ghost" onClick={onLeave}>Leave room</button>
+    </section>
+  )
+}
+
 function DisconnectedBanner({ partnerOnline, partner, phase }) {
   if (phase === 'lobby') return null
   if (partnerOnline) return null
@@ -794,6 +1142,8 @@ function AppInner() {
     content = <GuessScreen state={state} role={role} dispatch={dispatch} me={me} partner={partner} />
   } else if (state.phase === 'reveal') {
     content = <RevealScreen state={state} role={role} dispatch={dispatch} me={me} partner={partner} />
+  } else if (state.phase === 'ludo') {
+    content = <LudoScreen state={state} role={role} dispatch={dispatch} me={me} partner={partner} onLeave={leaveRoom} />
   } else if (state.phase === 'final') {
     content = (
       <FinalScreen
