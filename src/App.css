@@ -943,6 +943,23 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   font-size: 1rem;
   font-weight: 700;
 }
+.ludo-cell-mark.name {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  padding: 2px 5px;
+  border-radius: 999px;
+  line-height: 1;
+}
+.ludo-cell-mark.host-tag {
+  background: rgba(255, 76, 132, 0.22);
+  color: #ffb6d0;
+  border: 1px solid rgba(255, 121, 176, 0.5);
+}
+.ludo-cell-mark.guest-tag {
+  background: rgba(59, 130, 246, 0.22);
+  color: #b4ddff;
+  border: 1px solid rgba(125, 211, 252, 0.5);
+}
 
 .ludo-tokens {
   display: flex;
@@ -1169,6 +1186,60 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .ludo-event h2 { margin: 0 0 8px; }
 .ludo-event .question { margin: 8px 0 12px; font-size: 1.15rem; }
+.dare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 4px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.dare-chip.photo {
+  background: rgba(160, 102, 255, 0.18);
+  color: #d9c6ff;
+  border-color: rgba(160, 102, 255, 0.45);
+}
+.dare-chip.voice {
+  background: rgba(255, 121, 176, 0.18);
+  color: #ffc5dd;
+  border-color: rgba(255, 121, 176, 0.45);
+}
+.dare-kind-icon { font-size: 1rem; }
+.dare-photo-zone {
+  margin: 14px 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.dare-photo-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.dare-photo-preview img {
+  max-width: 260px;
+  max-height: 260px;
+  width: 100%;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 121, 176, 0.55);
+  box-shadow: 0 10px 24px rgba(255, 121, 176, 0.2);
+  object-fit: cover;
+}
+.error-text {
+  color: #ff9aa8;
+  font-size: 0.85rem;
+  margin: 4px 0 0;
+}
+.ghost.small {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
 .dare-text {
   font-size: 1.1rem;
   font-weight: 600;

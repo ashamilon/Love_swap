@@ -10,11 +10,14 @@ export const START_CELLS = { host: 0, guest: 12 }
 export const WIN_DISTANCE = TRACK_SIZE
 
 const CAPTURE_DARES = [
-  "You're caught! Blow a kiss to the screen.",
-  "Gotcha! Say one thing you love about them out loud.",
-  "Captured! Bite your lip and make a cute face.",
-  "Busted! Whisper their name like you mean it.",
-  "Caught red-handed! Promise one sweet thing for later.",
+  { text: "You're caught! Blow a kiss and snap a selfie of it.", kind: 'photo' },
+  { text: "Gotcha! Say one thing you love about them out loud.", kind: 'voice' },
+  { text: "Captured! Bite your lip and send a cute selfie.", kind: 'photo' },
+  { text: "Busted! Whisper their name like you mean it.", kind: 'voice' },
+  { text: "Caught red-handed! Promise one sweet thing for later, out loud.", kind: 'voice' },
+  { text: "Caught! Flash a heart sign with your hands in a selfie.", kind: 'photo' },
+  { text: "Busted! Send a pouty selfie to show who's boss.", kind: 'photo' },
+  { text: "Gotcha! Give them a compliment in your most flirty voice.", kind: 'voice' },
 ]
 
 function randomDare() {
@@ -118,6 +121,7 @@ function resolveRoll(state, who, dice) {
           captured: opp,
           by: who,
           dare: randomDare(),
+          photo: null,
           acked: { [opp]: false, [who]: false },
         },
         log: [{ t: Date.now(), text: `${who} captured ${opp}!` }, ...log].slice(0, 6),
@@ -286,6 +290,27 @@ function reduce(state, action) {
           subphase: 'rolling',
           turn: l.event.by,
         },
+      }
+    }
+    case 'LUDO_CAPTURE_PHOTO': {
+      if (state.phase !== 'ludo') return state
+      const l = state.ludo
+      if (!l || l.subphase !== 'event' || l.event?.kind !== 'capture') return state
+      if (action.who !== l.event.captured) return state
+      if (typeof action.dataUrl !== 'string' || !action.dataUrl.startsWith('data:image/')) return state
+      return {
+        ...state,
+        ludo: { ...l, event: { ...l.event, photo: action.dataUrl } },
+      }
+    }
+    case 'LUDO_CAPTURE_CLEAR_PHOTO': {
+      if (state.phase !== 'ludo') return state
+      const l = state.ludo
+      if (!l || l.subphase !== 'event' || l.event?.kind !== 'capture') return state
+      if (action.who !== l.event.captured) return state
+      return {
+        ...state,
+        ludo: { ...l, event: { ...l.event, photo: null } },
       }
     }
     case 'LUDO_HEART_BEGIN_JUDGING': {

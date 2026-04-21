@@ -7,6 +7,30 @@ import { formatQuestion } from './data/questions.js'
 import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
 import { sfx, isMuted, setMuted, primeAudio } from './lib/sounds.js'
 
+async function compressImage(file, maxDim = 480, quality = 0.65) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('read-failed'))
+    reader.readAsDataURL(file)
+  })
+  const img = await new Promise((resolve, reject) => {
+    const el = new Image()
+    el.onload = () => resolve(el)
+    el.onerror = () => reject(new Error('img-failed'))
+    el.src = dataUrl
+  })
+  const ratio = Math.min(1, maxDim / Math.max(img.width, img.height))
+  const w = Math.max(1, Math.round(img.width * ratio))
+  const h = Math.max(1, Math.round(img.height * ratio))
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0, w, h)
+  return canvas.toDataURL('image/jpeg', quality)
+}
+
 function VoiceControls({ voice, partnerName, highlight }) {
   const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
 
@@ -810,7 +834,15 @@ function cellCoords(i) {
   return { row: 24 - i, col: 0 } // left: 19..23
 }
 
+function shortName(name, fallback) {
+  const n = (name || '').trim()
+  if (!n) return fallback
+  return n.slice(0, 3).toUpperCase()
+}
+
 function LudoBoard({ ludo, hostName, guestName }) {
+  const hostTag = shortName(hostName, 'P1')
+  const guestTag = shortName(guestName, 'P2')
   const cells = []
   for (let i = 0; i < TRACK_SIZE; i += 1) {
     const { row, col } = cellCoords(i)
@@ -842,8 +874,8 @@ function LudoBoard({ ludo, hostName, guestName }) {
       >
         <span className="ludo-cell-num">{i}</span>
         {isHeart && <span className="ludo-cell-mark">♥</span>}
-        {isHostStart && !isHeart && <span className="ludo-cell-mark">H</span>}
-        {isGuestStart && !isHeart && <span className="ludo-cell-mark">G</span>}
+        {isHostStart && !isHeart && <span className="ludo-cell-mark name host-tag">{hostTag}</span>}
+        {isGuestStart && !isHeart && <span className="ludo-cell-mark name guest-tag">{guestTag}</span>}
         <div className="ludo-tokens">
           {hasHost && <div className="ludo-token host" title={hostName || 'Host'} />}
           {hasGuest && <div className="ludo-token guest" title={guestName || 'Guest'} />}
@@ -941,26 +973,114 @@ function Dice({ value }) {
 
 function LudoCaptureEvent({ ludo, role, me, partner, dispatch }) {
   const event = ludo.event
+  const dare = typeof event.dare === 'string' ? { text: event.dare, kind: 'voice' } : event.dare
   const youWereCaptured = event.captured === role
   const youDidCapture = event.by === role
   const iAcked = Boolean(event.acked?.[role])
+  const isPhoto = dare.kind === 'photo'
+  const [uploading, setUploading] = useState(false)
+  const [err, setErr] = useState('')
+  const fileRef = useRef(null)
+
+  const handleFile = async (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setErr('')
+    setUploading(true)
+    try {
+      const dataUrl = await compressImage(f, 480, 0.62)
+      if (dataUrl.length > 180_000) {
+        const smaller = await compressImage(f, 360, 0.55)
+        if (smaller.length > 180_000) {
+          setErr('Photo too large, try a different one.')
+          return
+        }
+        dispatch({ type: 'LUDO_CAPTURE_PHOTO', who: role, dataUrl: smaller })
+      } else {
+        dispatch({ type: 'LUDO_CAPTURE_PHOTO', who: role, dataUrl })
+      }
+      sfx.lock()
+    } catch {
+      setErr('Could not read that photo.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const mustWaitForPhoto = isPhoto && youWereCaptured && !event.photo
 
   return (
     <div className="ludo-event capture">
-      <h2>{youDidCapture ? 'Gotcha!' : youWereCaptured ? 'You got caught' : ''}</h2>
-      {youDidCapture && (
+      <h2>{youDidCapture ? 'Gotcha!' : 'You got caught'}</h2>
+      {youDidCapture ? (
         <p>You landed on {partner?.name}. They head back to start and you get an extra roll.</p>
+      ) : (
+        <p>{partner?.name} caught your token. Your dare:</p>
       )}
-      {youWereCaptured && (
-        <>
-          <p>{partner?.name} caught your token. Your dare:</p>
-          <p className="dare-text">{event.dare}</p>
-        </>
+
+      <div className={`dare-chip ${dare.kind}`}>
+        <span className="dare-kind-icon">{dare.kind === 'photo' ? '📸' : '🎤'}</span>
+        <span className="dare-kind-label">{dare.kind === 'photo' ? 'Photo dare' : 'Voice dare'}</span>
+      </div>
+      <p className="dare-text">{dare.text}</p>
+
+      {isPhoto && (
+        <div className="dare-photo-zone">
+          {event.photo ? (
+            <div className="dare-photo-preview">
+              <img src={event.photo} alt="Dare selfie" />
+              {youWereCaptured && (
+                <button
+                  className="ghost small"
+                  onClick={() => dispatch({ type: 'LUDO_CAPTURE_CLEAR_PHOTO', who: role })}
+                >
+                  Redo photo
+                </button>
+              )}
+            </div>
+          ) : youWereCaptured ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                capture="user"
+                style={{ display: 'none' }}
+                onChange={handleFile}
+              />
+              <button
+                className="cta"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? 'Uploading...' : '📸 Take / upload selfie'}
+              </button>
+              <p className="subtle center">Your photo will only show here during this moment.</p>
+              {err && <p className="error-text">{err}</p>}
+            </>
+          ) : (
+            <div className="waiting-card">
+              <div className="spinner" />
+              <p>Waiting for {partner?.name} to send a selfie...</p>
+            </div>
+          )}
+        </div>
       )}
+
+      {!isPhoto && (
+        <p className="subtle center">
+          {youWereCaptured
+            ? 'Use the voice chat above to respond out loud.'
+            : `Listen for ${partner?.name} on voice chat above.`}
+        </p>
+      )}
+
       <button
         className="cta"
         onClick={() => dispatch({ type: 'LUDO_ACK_CAPTURE', who: role })}
-        disabled={iAcked}
+        disabled={iAcked || mustWaitForPhoto}
+        title={mustWaitForPhoto ? 'Upload a selfie to continue' : undefined}
       >
         {iAcked ? `Waiting for ${partner?.name}...` : 'Continue'}
       </button>
