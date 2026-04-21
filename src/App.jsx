@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { useRoom } from './lib/useRoom.js'
 import { useVoice } from './lib/useVoice.js'
 import { isSupabaseConfigured } from './lib/supabase.js'
 import { formatQuestion } from './data/questions.js'
 import { HEART_CELLS, START_CELLS, TRACK_SIZE } from './lib/useRoom.js'
+import { sfx, isMuted, setMuted, primeAudio } from './lib/sounds.js'
 
 function VoiceControls({ voice, partnerName }) {
   const { enabled, status, muted, error, enable, disable, toggleMute, audioRef } = voice
@@ -127,6 +128,8 @@ function MenuScreen({ onCreate, onJoin, connecting, error }) {
           className="form-grid"
           onSubmit={(e) => {
             e.preventDefault()
+            primeAudio()
+            sfx.lock()
             onCreate(name)
           }}
         >
@@ -150,6 +153,8 @@ function MenuScreen({ onCreate, onJoin, connecting, error }) {
           className="form-grid"
           onSubmit={(e) => {
             e.preventDefault()
+            primeAudio()
+            sfx.lock()
             onJoin(name, code)
           }}
         >
@@ -347,7 +352,13 @@ function LobbyScreen({ role, state, dispatch, me, partner, roomCode, onLeave }) 
       </div>
 
       {isHost ? (
-        <button className="cta" onClick={() => dispatch({ type: 'START_GAME' })}>
+        <button
+          className="cta"
+          onClick={() => {
+            sfx.lock()
+            dispatch({ type: 'START_GAME' })
+          }}
+        >
           {state.gameType === 'ludo' ? 'Start Love Ludo' : 'Start game'}
         </button>
       ) : (
@@ -392,7 +403,10 @@ function OptionPicker({ options, value, onChange }) {
           key={opt}
           type="button"
           className={`option-btn ${value === opt ? 'selected' : ''}`}
-          onClick={() => onChange(opt)}
+          onClick={() => {
+            sfx.click()
+            onChange(opt)
+          }}
         >
           {opt}
         </button>
@@ -431,6 +445,7 @@ function AnswerScreen({ state, role, dispatch, me, partner }) {
   const submit = (e) => {
     e.preventDefault()
     if (!text.trim()) return
+    sfx.lock()
     dispatch({ type: 'SUBMIT_ANSWER', text: text.trim() })
     setText('')
   }
@@ -514,6 +529,7 @@ function GuessScreen({ state, role, dispatch, me, partner }) {
   const submit = (e) => {
     e.preventDefault()
     if (!text.trim()) return
+    sfx.lock()
     dispatch({ type: 'SUBMIT_GUESS', text: text.trim() })
     setText('')
   }
@@ -592,6 +608,16 @@ function RevealScreen({ state, role, dispatch, me, partner }) {
     const id = setTimeout(() => setFlipped(true), 350)
     return () => clearTimeout(id)
   }, [])
+
+  const similarity = state.similarity
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (similarity >= 0.8) sfx.match()
+      else if (similarity >= 0.45) sfx.close()
+      else sfx.miss()
+    }, 600)
+    return () => clearTimeout(t)
+  }, [similarity])
 
   const turn = state.turns[state.turnIndex]
   const isHost = role === 'host'
@@ -822,12 +848,71 @@ function LudoBoard({ ludo, hostName, guestName }) {
   )
 }
 
-function Dice({ value, rolling }) {
-  const faces = ['.', '..', '...', '::', ':::', '::::']
+function DiceFace({ n }) {
+  // 3x3 grid of dot positions for each dice number
+  const positions = {
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8],
+  }
+  const cells = positions[n] || []
+  return (
+    <div className="dice-face-grid">
+      {Array.from({ length: 9 }, (_, i) => (
+        <span
+          key={i}
+          className={`dice-dot ${cells.includes(i) ? 'on' : ''}`}
+        />
+      ))}
+    </div>
+  )
+}
+
+function Dice({ value }) {
+  const [displayValue, setDisplayValue] = useState(value ?? 1)
+  const [rolling, setRolling] = useState(false)
+  const prevValue = useRef(value)
+  const intervalRef = useRef(null)
+
+  useEffect(() => {
+    if (value === prevValue.current) return
+    prevValue.current = value
+    if (value == null) {
+      setDisplayValue(1)
+      return
+    }
+
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    setRolling(true)
+    sfx.diceRoll()
+
+    let ticks = 0
+    const maxTicks = 11
+    intervalRef.current = setInterval(() => {
+      ticks += 1
+      if (ticks >= maxTicks) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+        setDisplayValue(value)
+        setRolling(false)
+        sfx.diceLand()
+      } else {
+        setDisplayValue(Math.floor(Math.random() * 6) + 1)
+      }
+    }, 70)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [value])
+
   return (
     <div className={`dice-box ${rolling ? 'rolling' : ''}`}>
       <div className="dice">
-        <span className="dice-face">{value ? faces[value - 1] : '?'}</span>
+        <DiceFace n={displayValue} />
       </div>
     </div>
   )
@@ -942,6 +1027,20 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
 
 function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
   const ludo = state.ludo
+
+  const eventKind = ludo?.event?.kind
+  const winner = ludo?.winner
+  useEffect(() => {
+    if (eventKind === 'heart') sfx.heart()
+    else if (eventKind === 'capture') sfx.capture()
+  }, [eventKind])
+  useEffect(() => {
+    if (winner) {
+      const t = setTimeout(() => sfx.win(), 200)
+      return () => clearTimeout(t)
+    }
+  }, [winner])
+
   if (!ludo) return null
 
   const myTurn = ludo.turn === role
@@ -1028,24 +1127,36 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
         </div>
       </div>
 
-      {ludo.subphase === 'rolling' && (
-        <div className="ludo-roll-row">
-          <Dice value={ludo.dice} />
-          {myTurn ? (
+      <div className="ludo-roll-row">
+        <Dice value={ludo.dice} />
+        <div className="roll-action">
+          <div className="turn-indicator">
+            {myTurn ? 'Your turn' : `${partner?.name}'s turn`}
+          </div>
+          {ludo.subphase === 'rolling' && myTurn && (
             <button
               className="cta"
-              onClick={() => dispatch({ type: 'LUDO_ROLL', who: role })}
+              onClick={() => {
+                sfx.click()
+                dispatch({ type: 'LUDO_ROLL', who: role })
+              }}
             >
               Roll the dice
             </button>
-          ) : (
+          )}
+          {ludo.subphase === 'rolling' && !myTurn && (
             <div className="waiting-card inline">
               <div className="spinner small" />
               <p>{partner?.name} is rolling...</p>
             </div>
           )}
+          {ludo.subphase === 'event' && (
+            <div className="waiting-card inline">
+              <p>Event on cell {ludo.positions[ludo.turn]}</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {ludo.subphase === 'event' && ludo.event?.kind === 'capture' && (
         <LudoCaptureEvent ludo={ludo} role={role} me={me} partner={partner} dispatch={dispatch} />
@@ -1064,6 +1175,28 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
 
       <button className="ghost" onClick={onLeave}>Leave room</button>
     </section>
+  )
+}
+
+function MuteToggle() {
+  const [muted, setLocalMuted] = useState(() => isMuted())
+  const toggle = () => {
+    const next = !muted
+    setMuted(next)
+    setLocalMuted(next)
+    primeAudio()
+    if (!next) sfx.click()
+  }
+  return (
+    <button
+      type="button"
+      className={`mute-toggle ${muted ? 'is-muted' : ''}`}
+      onClick={toggle}
+      title={muted ? 'Unmute sound' : 'Mute sound'}
+      aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+    >
+      <span className="mute-icon">{muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}</span>
+    </button>
   )
 }
 
@@ -1168,6 +1301,7 @@ function AppInner() {
         phase={state.phase}
       />
       {showVoice && <VoiceControls voice={voice} partnerName={partner?.name} />}
+      <MuteToggle />
       {content}
       <footer className="footer">
         <span>Love Swap</span>
