@@ -25,7 +25,15 @@ function randomDare() {
 }
 
 function pickHeartQuestion(config) {
-  const pool = buildQuestionPool(config.mode, Number(config.spice), 1)
+  // Heart cells focus on multiple-choice prompts so couples can tap to answer
+  // and guess without needing voice chat. We fall back to an open-ended
+  // (voice) question only when no choice questions are available at the
+  // current mode + spice level.
+  const pool = buildQuestionPool(config.mode, Number(config.spice), 40)
+  const choices = pool.filter((q) => q.type === 'choice')
+  if (choices.length > 0) {
+    return choices[Math.floor(Math.random() * choices.length)]
+  }
   return pool[0]
 }
 
