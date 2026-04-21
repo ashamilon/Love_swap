@@ -128,6 +128,7 @@ function resolveRoll(state, who, dice) {
   // Heart cell
   if (HEART_CELLS.includes(newPos)) {
     const question = pickHeartQuestion(state.config)
+    const isChoice = question.type === 'choice'
     return {
       ...state,
       ludo: {
@@ -140,7 +141,11 @@ function resolveRoll(state, who, dice) {
           kind: 'heart',
           question,
           landed: who,
-          phase: 'prompt', // prompt -> judging -> done
+          // For open questions: prompt -> judging (voice-based)
+          // For choice questions: picking -> guessing -> reveal
+          phase: isChoice ? 'picking' : 'prompt',
+          answer: null,
+          guess: null,
           matched: null,
         },
         log: [{ t: Date.now(), text: `${who} landed on a heart cell` }, ...log].slice(0, 6),
@@ -337,6 +342,86 @@ function reduce(state, action) {
       }
       // no match, pass turn to opponent (unless dice was 6)
       const opp = who === 'host' ? 'guest' : 'host'
+      return {
+        ...state,
+        ludo: {
+          ...l,
+          subphase: 'rolling',
+          turn: l.dice === 6 ? who : opp,
+          event: null,
+          log: [
+            { t: Date.now(), text: `${who} missed the heart prompt` },
+            ...l.log,
+          ].slice(0, 6),
+        },
+      }
+    }
+    case 'LUDO_HEART_PICK': {
+      if (state.phase !== 'ludo') return state
+      const l = state.ludo
+      if (!l || l.event?.kind !== 'heart' || l.event.phase !== 'picking') return state
+      if (action.who !== l.event.landed) return state
+      return {
+        ...state,
+        ludo: { ...l, event: { ...l.event, answer: action.choice, phase: 'guessing' } },
+      }
+    }
+    case 'LUDO_HEART_GUESS': {
+      if (state.phase !== 'ludo') return state
+      const l = state.ludo
+      if (!l || l.event?.kind !== 'heart' || l.event.phase !== 'guessing') return state
+      const guesser = l.event.landed === 'host' ? 'guest' : 'host'
+      if (action.who !== guesser) return state
+      const matched = action.choice === l.event.answer
+      return {
+        ...state,
+        ludo: {
+          ...l,
+          event: { ...l.event, guess: action.choice, matched, phase: 'reveal' },
+        },
+      }
+    }
+    case 'LUDO_HEART_CONTINUE': {
+      if (state.phase !== 'ludo') return state
+      const l = state.ludo
+      if (!l || l.event?.kind !== 'heart' || l.event.phase !== 'reveal') return state
+      const who = l.event.landed
+      const opp = who === 'host' ? 'guest' : 'host'
+      if (l.event.matched) {
+        const oldPos = l.positions[who]
+        const newPos = (oldPos + 3) % TRACK_SIZE
+        const newDist = l.distance[who] + 3
+        const positions = { ...l.positions, [who]: newPos }
+        const distance = { ...l.distance, [who]: newDist }
+        if (newDist >= WIN_DISTANCE) {
+          return {
+            ...state,
+            ludo: {
+              ...l,
+              positions,
+              distance,
+              winner: who,
+              subphase: 'done',
+              event: null,
+            },
+          }
+        }
+        return {
+          ...state,
+          ludo: {
+            ...l,
+            positions,
+            distance,
+            subphase: 'rolling',
+            turn: who,
+            event: null,
+            log: [
+              { t: Date.now(), text: `${who} matched the heart prompt +3` },
+              ...l.log,
+            ].slice(0, 6),
+          },
+        }
+      }
       return {
         ...state,
         ludo: {

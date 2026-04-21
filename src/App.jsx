@@ -973,15 +973,141 @@ function LudoCaptureEvent({ ludo, role, me, partner, dispatch }) {
   )
 }
 
+function LudoHeartChoiceEvent({ event, ludo, role, me, partner, dispatch }) {
+  const iLanded = event.landed === role
+  const iGuess = !iLanded
+  const responderName = iLanded ? me?.name : partner?.name
+  const guesserName = iLanded ? partner?.name : me?.name
+  const questionText = formatQuestion(event.question.text, {
+    viewerIsResponder: iLanded,
+    responderName,
+  })
+  const [pick, setPick] = useState('')
+
+  useEffect(() => {
+    setPick('')
+  }, [event.phase])
+
+  if (event.phase === 'picking') {
+    return (
+      <div className="ludo-event heart">
+        <h2>♥ Heart cell</h2>
+        <div className="category-chip">{event.question.category}</div>
+        <h3 className="question">{questionText}</h3>
+        {iLanded ? (
+          <>
+            <p className="subtle">Pick your honest answer. {partner?.name} will try to guess which one.</p>
+            <OptionPicker options={event.question.options} value={pick} onChange={setPick} />
+            <button
+              className="cta"
+              disabled={!pick}
+              onClick={() => {
+                sfx.lock()
+                dispatch({ type: 'LUDO_HEART_PICK', who: role, choice: pick })
+              }}
+            >
+              Lock answer
+            </button>
+          </>
+        ) : (
+          <div className="waiting-card">
+            <div className="spinner" />
+            <p>Waiting for {partner?.name} to pick their answer...</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (event.phase === 'guessing') {
+    return (
+      <div className="ludo-event heart">
+        <h2>♥ Heart cell</h2>
+        <div className="category-chip">{event.question.category}</div>
+        <h3 className="question">{questionText}</h3>
+        {iGuess ? (
+          <>
+            <p className="subtle">{partner?.name} picked one. Which do you think they chose?</p>
+            <OptionPicker options={event.question.options} value={pick} onChange={setPick} />
+            <button
+              className="cta"
+              disabled={!pick}
+              onClick={() => {
+                sfx.lock()
+                dispatch({ type: 'LUDO_HEART_GUESS', who: role, choice: pick })
+              }}
+            >
+              Lock guess and reveal
+            </button>
+          </>
+        ) : (
+          <div className="waiting-card">
+            <div className="spinner" />
+            <p>Answer locked. Waiting for {partner?.name} to guess...</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // reveal phase
+  const iHost = role === 'host'
+  return (
+    <div className="ludo-event heart">
+      <h2>{event.matched ? '♥ Matched!' : '♥ Not quite'}</h2>
+      <h3 className="question">{questionText}</h3>
+      <ChoiceRevealGrid
+        options={event.question.options}
+        answer={event.answer}
+        guess={event.guess}
+        responderName={responderName}
+        guesserName={guesserName}
+      />
+      {event.matched ? (
+        <p className="match-badge">Exact match - {responderName} gets +3 move</p>
+      ) : (
+        <p className="subtle center">Missed it. Turn goes to {event.landed === 'host' ? partner?.name : me?.name}.</p>
+      )}
+      {iHost ? (
+        <button
+          className="cta"
+          onClick={() => {
+            sfx.click()
+            dispatch({ type: 'LUDO_HEART_CONTINUE' })
+          }}
+        >
+          Continue
+        </button>
+      ) : (
+        <p className="subtle center">Waiting for host to continue...</p>
+      )}
+    </div>
+  )
+}
+
 function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
   const event = ludo.event
+  const isChoice = event.question.type === 'choice'
+
+  if (isChoice) {
+    return (
+      <LudoHeartChoiceEvent
+        event={event}
+        ludo={ludo}
+        role={role}
+        me={me}
+        partner={partner}
+        dispatch={dispatch}
+      />
+    )
+  }
+
   const iLanded = event.landed === role
   const responderName = iLanded ? me?.name : partner?.name
   const questionText = formatQuestion(event.question.text, {
     viewerIsResponder: iLanded,
     responderName,
   })
-  const isChoice = event.question.type === 'choice'
 
   if (event.phase === 'prompt') {
     return (
@@ -989,13 +1115,6 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
         <h2>♥ Heart cell</h2>
         <div className="category-chip">{event.question.category}</div>
         <h3 className="question">{questionText}</h3>
-        {isChoice && (
-          <div className="option-grid static">
-            {event.question.options.map((opt) => (
-              <div key={opt} className="option-btn static">{opt}</div>
-            ))}
-          </div>
-        )}
         <div className="voice-hint">
           <span className="voice-hint-icon">{'\uD83C\uDFA4'}</span>
           <div>
@@ -1027,7 +1146,7 @@ function LudoHeartEvent({ ludo, role, me, partner, dispatch }) {
     )
   }
 
-  // judging phase
+  // judging phase (open questions only)
   const iJudge = !iLanded
   return (
     <div className="ludo-event heart">
@@ -1068,11 +1187,22 @@ function LudoScreen({ state, role, dispatch, me, partner, onLeave }) {
   const ludo = state.ludo
 
   const eventKind = ludo?.event?.kind
+  const eventPhase = ludo?.event?.phase
+  const eventMatched = ludo?.event?.matched
   const winner = ludo?.winner
   useEffect(() => {
     if (eventKind === 'heart') sfx.heart()
     else if (eventKind === 'capture') sfx.capture()
   }, [eventKind])
+  useEffect(() => {
+    if (eventKind === 'heart' && eventPhase === 'reveal') {
+      const t = setTimeout(() => {
+        if (eventMatched) sfx.match()
+        else sfx.miss()
+      }, 200)
+      return () => clearTimeout(t)
+    }
+  }, [eventKind, eventPhase, eventMatched])
   useEffect(() => {
     if (winner) {
       const t = setTimeout(() => sfx.win(), 200)
